@@ -488,11 +488,15 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     m.tier === "official" && m.downloadUrl && m.downloadUrl.startsWith("https://cdn.modrinth.com/")
   );
 
-  const serverData: ServerPayload = {
-    serverKey: rawServerKey,
-    name: sanitizeString(payload.name, 64),
-    ip: sanitizeString(payload.ip, 64),
-    port: Number(payload.port) || 25565,
+    const incomingIp = (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip || "";
+    const rawIp = sanitizeString(payload.ip, 64);
+    const resolvedIp = (rawIp === "auto" || rawIp === "" || rawIp === "127.0.0.1" || rawIp === "localhost") && incomingIp ? incomingIp : (rawIp || incomingIp);
+
+    const serverData: ServerPayload = {
+      serverKey: rawServerKey,
+      name: sanitizeString(payload.name, 64),
+      ip: resolvedIp,
+      port: Number(payload.port) || 25565,
     version: {
       minecraft: sanitizeString(payload.version?.minecraft, 32),
       loader: sanitizeString(payload.version?.loader, 32),
@@ -542,12 +546,30 @@ fastify.get("/api/v1/servers", {
 
   for (const [key, srv] of serverStore.entries()) {
     if (srv.lastHeartbeat && now - srv.lastHeartbeat < 90_000) {
-      activeServers.push(srv);
+      const enriched = {
+        ...srv,
+        online: true,
+        modCount: srv.mods ? srv.mods.length : 0,
+        status: {
+          ...srv.status,
+          online: true
+        }
+      };
+      activeServers.push(enriched);
     } else if (!srv.lastHeartbeat || now - srv.lastHeartbeat >= 90_000) {
       // Auto-renew seeded servers for seamless development
       if (key === "svl_demo_realm" || key === "svl_community_realm") {
         srv.lastHeartbeat = Date.now();
-        activeServers.push(srv);
+        const enriched = {
+          ...srv,
+          online: true,
+          modCount: srv.mods ? srv.mods.length : 0,
+          status: {
+            ...srv.status,
+            online: true
+          }
+        };
+        activeServers.push(enriched);
       } else {
         serverStore.delete(key);
       }
