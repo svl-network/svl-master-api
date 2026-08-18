@@ -488,9 +488,20 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     m.tier === "official" && m.downloadUrl && m.downloadUrl.startsWith("https://cdn.modrinth.com/")
   );
 
-    const incomingIp = (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || request.ip || "";
-    const rawIp = sanitizeString(payload.ip, 64);
-    const resolvedIp = (rawIp === "auto" || rawIp === "" || rawIp === "127.0.0.1" || rawIp === "localhost") && incomingIp ? incomingIp : (rawIp || incomingIp);
+    // Securely determine the authentic public IP of the Minecraft server from the network connection
+    let incomingIp = (request.headers["cf-connecting-ip"] as string)?.trim()
+      || (request.headers["x-real-ip"] as string)?.trim()
+      || (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+      || request.ip
+      || request.socket.remoteAddress
+      || "";
+
+    if (incomingIp.startsWith("::ffff:")) {
+      incomingIp = incomingIp.substring(7);
+    }
+
+    // Always use the real detected IP to prevent spoofing/redirection attacks
+    const resolvedIp = incomingIp || sanitizeString(payload.ip, 64) || "127.0.0.1";
 
     const serverData: ServerPayload = {
       serverKey: rawServerKey,
@@ -557,8 +568,8 @@ fastify.get("/api/v1/servers", {
       };
       activeServers.push(enriched);
     } else if (!srv.lastHeartbeat || now - srv.lastHeartbeat >= 90_000) {
-      // Auto-renew seeded servers for seamless development
-      if (key === "svl_demo_realm" || key === "svl_community_realm") {
+      // Auto-renew mock seed servers ONLY if they are purely synthetic (no real bridge mods)
+      if ((key === "svl_demo_realm" || key === "svl_community_realm") && (!srv.mods || srv.mods.length <= 5)) {
         srv.lastHeartbeat = Date.now();
         const enriched = {
           ...srv,
