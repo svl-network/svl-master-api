@@ -66,7 +66,28 @@ const fastify = Fastify({
 
 // Register Plugins BEFORE routes
 await fastify.register(cors, {
-  origin: true,
+  origin: (origin, cb) => {
+    // Allow non-browser requests (e.g. Minecraft plugins, launchers, curl)
+    if (!origin) return cb(null, true);
+    
+    const allowed = [
+      "https://realms.sunveil.net",
+      "https://dash.sunveil.net",
+      "https://sunveil.net",
+      "https://www.sunveil.net",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001"
+    ];
+    
+    if (allowed.includes(origin) || origin.endsWith(".sunveil.net")) {
+      return cb(null, true);
+    }
+    
+    // In production, reject unknown cross-origin web requests
+    return cb(new Error("CORS origin not allowed"), false);
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 });
@@ -77,8 +98,17 @@ await fastify.register(helmet, {
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc: ["'self'", "data:", "https:", "http:"],
-      connectSrc: ["'self'", "http://127.0.0.1:3001", "http://192.168.0.148:3001", "https://api.sunveil.net", "https://realms.sunveil.net"]
+      imgSrc: ["'self'", "data:", "https:", "http:", "https://raw.githubusercontent.com"],
+      connectSrc: [
+        "'self'",
+        "https://realms.sunveil.net",
+        "https://dash.sunveil.net",
+        "https://api.sunveil.net",
+        "https://sunveil.net",
+        "https://www.sunveil.net",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001"
+      ]
     }
   },
   crossOriginEmbedderPolicy: false
@@ -783,7 +813,7 @@ const seedDemoServers = () => {
   serverStore.set("svl_demo_realm", {
     serverKey: "svl_demo_realm",
     name: "Sunveil Modded Server",
-    ip: "127.0.0.1",
+    ip: "java.sunveil.net",
     port: 25565,
     version: {
       minecraft: "1.21.1",
