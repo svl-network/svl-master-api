@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Datenschutzerklärung — Sunveil Realms</title>
+  <meta name="description" content="Datenschutzerklärung (Privacy Policy) gemäß DSGVO für Sunveil Realms und Sunveil Connect.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=5.0">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand">
+        <svg class="brand-mark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span class="brand-name">Sunveil Realms</span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="/">Startseite</a>
+        <a href="/#how-it-works">Funktionsweise</a>
+        <a href="/#bridge">Server-Bridge</a>
+        <a href="/impressum.html">Impressum</a>
+        <a href="/datenschutz.html" class="active">Datenschutz</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="/" class="btn btn-secondary btn-sm">← Zurück zur Übersicht</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="legal-page">
+    <div class="container-narrow">
+      <div class="legal-header">
+        <h1 class="legal-title">Datenschutzerklärung</h1>
+        <p class="legal-meta">Stand: 18. August 2026 | Verantwortlicher Umgang mit personenbezogenen Daten gemäß DSGVO</p>
+      </div>
+
+      <div class="legal-content">
+        <div class="legal-section">
+          <h2>1. Name und Kontaktdaten des Verantwortlichen</h2>
+          <p>Verantwortlicher im Sinne der Datenschutz-Grundverordnung (DSGVO) und anderer nationaler Datenschutzgesetze ist:</p>
+          <p>
+            <strong>Tristan Adolf</strong><br>
+            c/o Block Services<br>
+            Stuttgarter Str. 106<br>
+            70736 Fellbach<br>
+            Deutschland<br>
+            E-Mail: <a href="mailto:support@bluestyle.dev" class="text-link">support@bluestyle.dev</a><br>
+            Telefon: +49 (0) 179 7354849
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>2. Grundsätze der Datenverarbeitung bei Sunveil</h2>
+          <p>
+            Wir verarbeiten personenbezogene Daten unserer Nutzer grundsätzlich nur, soweit dies zur Bereitstellung einer funktionsfähigen Website, unserer Dienste (Sunveil Master API) sowie des Desktop-Clients (Sunveil Connect) und der Server-Bridge (svl-bridge) erforderlich ist.
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>3. Konkrete Verarbeitungsvorgänge</h2>
+          
+          <h3>a) Besuch der Website &amp; Bereitstellung von Logfiles</h3>
+          <p>
+            Bei jedem Aufruf unserer Website oder API erfasst unser System automatisiert Daten und Informationen vom Computersystem des aufrufenden Rechners:
+          </p>
+          <ul>
+            <li>IP-Adresse des Nutzers (zur Abwehr von Denial-of-Service-Angriffen und Sicherstellung der Systemstabilität)</li>
+            <li>Datum und Uhrzeit der Anfrage</li>
+            <li>HTTP-Methode und aufgerufene URL / Endpoint</li>
+            <li>HTTP-Statuscode und übertragene Datenmenge</li>
+            <li>Ggf. User-Agent des anfragenden Browsers oder Clients</li>
+          </ul>
+          <p>
+            <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO (Berechtigtes Interesse an der technischen Stabilität und IT-Sicherheit).<br>
+            <strong>Speicherdauer:</strong> Logdaten werden aus Sicherheitsgründen für maximal 14 Tage gespeichert und anschließend gelöscht oder anonymisiert.
+          </p>
+
+          <h3>b) Registrierung und Verwaltung von Entwickler-/Server-Accounts</h3>
+          <p>
+            Server-Betreiber können ein Entwicklerkonto anlegen, um Bridge-Lizenzschlüssel zu generieren und Server-Einträge zu verwalten:
+          </p>
+          <ul>
+            <li>E-Mail-Adresse</li>
+            <li>Passwort (ausschließlich als kryptographisch mit scrypt gesalzener Hash gespeichert)</li>
+            <li>Zeitpunkt der Registrierung</li>
+            <li>Generierter Bridge-Lizenzschlüssel (z.B. <code>SVL-FREE-xxxx-xxxx</code>)</li>
+          </ul>
+          <p>
+            <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung bzw. Durchführung vorvertraglicher Maßnahmen).<br>
+            <strong>Speicherdauer:</strong> Daten verbleiben gespeichert, solange das Konto aktiv ist. Bei Kontolöschung werden die Profildaten und Lizenzschlüssel unwiderruflich gelöscht.
+          </p>
+
+          <h3>c) Server-Registrierung und Bridge-Telemetrie</h3>
+          <p>
+            Wenn ein Server-Betreiber das <code>svl-bridge</code>-Plugin betreibt, übermittelt dieses in regelmäßigen Abständen Heartbeat-Signale an die Master-API:
+          </p>
+          <ul>
+            <li>Server-IP und Port</li>
+            <li>Minecraft-Version und Modloader (z.B. Forge 1.21.1)</li>
+            <li>Aktuelle Spieleranzahl und maximale Slotanzahl</li>
+            <li>Mod-Manifest: Dateinamen, Dateigrößen und kryptographische SHA-256 Checksummen der erforderlichen Mod-Dateien</li>
+          </ul>
+          <p>
+            <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO (Erfüllung des Synchronisationsdienstes).
+          </p>
+
+          <h3>d) Client-Synchronisation (Sunveil Connect)</h3>
+          <p>
+            Wenn ein Spieler über den Desktop-Client eine Server-Verbindung aufbaut, fragt der Client das Mod-Manifest der Master-API ab. Es werden hierbei keine Spieler-Identitäten oder privaten Chat-Inhalte an die Master-API übertragen.
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>4. Lokale Speicherung &amp; Cookies (§ 25 TDDDG)</h2>
+          <p>
+            Unsere Website verwendet <strong>keine Tracking-, Werbe- oder Analyse-Cookies</strong>.
+          </p>
+          <p>
+            Wir nutzen ausschließlich technisch zwingend notwendigen lokalen Browserspeicher (<code>localStorage</code>), um das Authentifizierungs-Token (JWT) für angemeldete Server-Betreiber während der aktiven Sitzung vorzuhalten.
+          </p>
+          <p>
+            <strong>Rechtsgrundlage:</strong> § 25 Abs. 2 Nr. 2 TDDDG (Unbedingte Erforderlichkeit zur Bereitstellung des vom Nutzer ausdrücklich gewünschten Telemediendienstes).
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>5. Einbindung von Drittanbietern</h2>
+          <h3>a) Modrinth CDN</h3>
+          <p>
+            Zur Bereitstellung öffentlich verfügbarer Minecraft-Modifikationen verweist Sunveil Connect auf die öffentlichen Endpoints und CDNs von Modrinth. Beim Download von Mod-Dateien stellt der Client eine direkte Verbindung zu den Servern von Modrinth her. Es gelten die Datenschutzbestimmungen von Modrinth.
+          </p>
+          <h3>b) GitHub</h3>
+          <p>
+            Quellcodes, Client-Installationsdateien und Release-Binaries werden über GitHub Releases bereitgestellt. Bei einem Download gelten die Bestimmungen der GitHub Inc. / Microsoft Corporation.
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>6. Rechte der betroffenen Personen</h2>
+          <p>Ihnen stehen nach der DSGVO folgende Rechte bezüglich Ihrer personenbezogenen Daten zu:</p>
+          <ul>
+            <li><strong>Auskunftsrecht (Art. 15 DSGVO):</strong> Auskunft über Ihre von uns verarbeiteten Daten.</li>
+            <li><strong>Berichtigungsrecht (Art. 16 DSGVO):</strong> Berichtigung unrichtiger oder Vervollständigung unvollständiger Daten.</li>
+            <li><strong>Löschungsrecht (Art. 17 DSGVO):</strong> Löschung Ihrer bei uns gespeicherten Daten (Recht auf Vergessenwerden).</li>
+            <li><strong>Einschränkung der Verarbeitung (Art. 18 DSGVO):</strong> Einschränkung der Datenverarbeitung.</li>
+            <li><strong>Datenübertragbarkeit (Art. 20 DSGVO):</strong> Erhalt Ihrer Daten in einem strukturierten, gängigen und maschinenlesbaren Format.</li>
+            <li><strong>Widerspruchsrecht (Art. 21 DSGVO):</strong> Widerspruch gegen Verarbeitungen auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO.</li>
+          </ul>
+          <p>
+            Zur Ausübung Ihrer Rechte wenden Sie sich bitte per E-Mail an den oben genannten Verantwortlichen.
+          </p>
+          <p>
+            Zudem haben Sie das Recht auf Beschwerde bei einer zuständigen Datenschutz-Aufsichtsbehörde (Art. 77 DSGVO).
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>7. Aktualität und Änderung dieser Datenschutzerklärung</h2>
+          <p>
+            Diese Datenschutzerklärung ist aktuell gültig und hat den Stand August 2026. Durch die Weiterentwicklung unserer Software oder geänderte gesetzliche Vorgaben kann eine Anpassung notwendig werden.
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom" style="border-top: none; padding-top: 0;">
+        <span>Sunveil Realms — Datenschutzerklärung</span>
+        <div style="display: flex; gap: 16px;">
+          <a href="/impressum.html" class="text-secondary">Impressum</a>
+          <a href="/datenschutz.html" class="text-secondary">Datenschutz</a>
+          <a href="/terms.html" class="text-secondary">AGB</a>
+          <a href="/licenses.html" class="text-secondary">Lizenzen</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceptable Use Policy — Sunveil Realms</title>
+  <meta name="description" content="Acceptable Use Policy governing server content, client synchronization, and network security across Sunveil Services.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=5.0">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand">
+        <svg class="brand-mark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span class="brand-name">Sunveil Realms</span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <a href="/#how-it-works">How it works</a>
+        <a href="/#bridge">Bridge</a>
+        <a href="/terms.html">Terms</a>
+        <a href="/acceptable-use.html" class="active">Acceptable Use</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="/" class="btn btn-secondary btn-sm">← Back to Overview</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="legal-page">
+    <div class="container-narrow">
+      <div class="legal-header">
+        <h1 class="legal-title">Acceptable Use Policy</h1>
+        <p class="legal-meta">Last updated: August 18, 2026 | Safety, file integrity, and network protection guidelines</p>
+      </div>
+
+      <div class="legal-content">
+        <div class="legal-section">
+          <h2>1. Purpose and Application</h2>
+          <p>
+            This Acceptable Use Policy ("AUP") outlines the security standards and usage rules for all users, developers, and server administrators connecting to the Sunveil network, the Master API, or utilizing Sunveil Connect and the <code>svl-bridge</code> plugin.
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>2. Prohibited Content and Malicious Payloads</h2>
+          <p>
+            You may not distribute, host, mirror, or link to any file or package through the Sunveil synchronization infrastructure that contains or executes:
+          </p>
+          <ul>
+            <li><strong>Malicious Code:</strong> Viruses, worms, trojans, ransomware, keyloggers, botnets, or spyware.</li>
+            <li><strong>Credential Harvesters:</strong> Payloads designed to extract Minecraft session tokens, Microsoft OAuth tokens, browser credentials, or local passwords.</li>
+            <li><strong>Unauthorized Executables:</strong> Native binaries (.exe, .dll, .so) disguised as Minecraft Java archives (.jar) without appropriate security declaration and player disclosure.</li>
+            <li><strong>Exploits and Droppers:</strong> Code designed to exploit Java Virtual Machine (JVM) vulnerabilities or execute unauthorized background commands on player machines.</li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>3. Network and API Integrity</h2>
+          <p>
+            Users and administrators must not compromise the availability, performance, or integrity of Sunveil network infrastructure:
+          </p>
+          <ul>
+            <li><strong>Denial of Service:</strong> Flooding Master API endpoints, heartbeat listeners, or download proxies with automated requests.</li>
+            <li><strong>Authentication Bypass:</strong> Forging client signatures, spoofing Hardware IDs (HWID), or circumventing rate-limiting rules.</li>
+            <li><strong>Unsolicited Scraping:</strong> Mass scraping of registered server listings or user databases using unauthorized bots.</li>
+            <li><strong>License Abuse:</strong> Sharing or publicly distributing private bridge license keys intended for single server deployments.</li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>4. Content Rights and Intellectual Property</h2>
+          <p>
+            Server administrators must respect intellectual property rights. You may not distribute mod packages, shader assets, or resource packs through server manifests if the respective authors explicitly prohibit distribution or mirroring, unless you have obtained written authorization.
+          </p>
+        </div>
+
+        <div class="legal-section">
+          <h2>5. Enforcement and Account Suspension</h2>
+          <p>
+            Sunveil reserves the right to immediately invalidate bridge license keys, hide server listings from the Sunveil Connect browser, and suspend developer accounts found to be in violation of this Policy. Severe security violations involving malicious file distribution will be reported to appropriate law enforcement authorities.
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom" style="border-top: none; padding-top: 0;">
+        <span>Sunveil Realms — Acceptable Use Policy</span>
+        <div style="display: flex; gap: 16px;">
+          <a href="/impressum.html" class="text-secondary">Legal Notice</a>
+          <a href="/datenschutz.html" class="text-secondary">Privacy</a>
+          <a href="/terms.html" class="text-secondary">Terms</a>
+          <a href="/acceptable-use.html" class="text-secondary">Acceptable Use</a>
+          <a href="/licenses.html" class="text-secondary">Licenses</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# Environment & Secrets
+.env
+.env.*
+.env.local
+.env.production
+!.env.example
+
+# Build outputs & dependencies
+node_modules/
+dist/
+build/
+src/*.js
+src/*.d.ts
+src/*.map
+*.jar
+.DS_Store
+*.tsbuildinfo
+
+# Local database & telemetry data
+*.sqlite
+*.sqlite-journal
+data/
+*.log
+logs/
+
+# IDE & OS files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+Thumbs.db
