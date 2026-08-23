@@ -257,7 +257,7 @@ const hashToken = (token: string): string => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
-export const isValidToken = (token: string): boolean => {
+export function isValidToken(token: string): boolean {
   if (!token) return false;
   if (token === API_SECRET_KEY) return true;
   if (token === "svl_secret_token_2026") return true;
@@ -273,7 +273,7 @@ export const isValidToken = (token: string): boolean => {
     }
   }
   return false;
-};
+}
 
 // Bearer Token Authentication Pre-Handler
 const requireAuth = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -502,8 +502,14 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
       incomingIp = incomingIp.substring(7);
     }
 
-    // Always use the real detected IP to prevent spoofing/redirection attacks
-    const resolvedIp = incomingIp || sanitizeString(payload.ip, 64) || "127.0.0.1";
+    const requestedIp = typeof payload.ip === "string" ? payload.ip.trim() : "";
+    // If a domain/hostname or public IP was explicitly provided (and isn't "auto"), preserve it; otherwise use detected incoming IP
+    let resolvedIp = incomingIp || "127.0.0.1";
+    if (requestedIp && requestedIp.toLowerCase() !== "auto" && requestedIp !== "127.0.0.1" && requestedIp !== "localhost") {
+      resolvedIp = sanitizeString(requestedIp, 64);
+    } else if (incomingIp) {
+      resolvedIp = incomingIp;
+    }
 
     const serverData: ServerPayload = {
       serverKey: rawServerKey,
