@@ -205,6 +205,7 @@ export interface ModInfo {
   sha256: string;
   downloadUrl: string;
   tier?: "official" | "community";
+  targetFolder?: string;
 }
 
 export interface ServerLinks {
@@ -480,7 +481,8 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
       fileName: safeFileName,
       sha256: safeSha256,
       downloadUrl: typeof m.downloadUrl === "string" ? m.downloadUrl.trim() : "",
-      tier: m.tier || (isOfficial ? "official" : "community")
+      tier: m.tier || (isOfficial ? "official" : "community"),
+      targetFolder: sanitizeString((m as any).targetFolder, 32) || "mods"
     };
   });
 
