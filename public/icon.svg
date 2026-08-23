@@ -1,0 +1,50 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Sunveil Realms</title>
+  <defs>
+    <linearGradient id="bgGradApi" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#181B22"/>
+      <stop offset="100%" stop-color="#0A0B0E"/>
+    </linearGradient>
+    <linearGradient id="borderGradApi" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00E599" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#2C323D" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#00E599" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="facetTopApi" x1="24" y1="6" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00FFA8"/>
+      <stop offset="100%" stop-color="#00C980"/>
+    </linearGradient>
+    <linearGradient id="facetRightApi" x1="24" y1="24" x2="40" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00B36E"/>
+      <stop offset="100%" stop-color="#00663D"/>
+    </linearGradient>
+    <linearGradient id="facetLeftApi" x1="8" y1="34" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#008A54"/>
+      <stop offset="100%" stop-color="#024528"/>
+    </linearGradient>
+    <linearGradient id="goldCrownApi" x1="16" y1="6" x2="32" y2="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFE066"/>
+      <stop offset="100%" stop-color="#FF9900"/>
+    </linearGradient>
+    <linearGradient id="boltGradApi" x1="23" y1="13" x2="25" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#D6FFF0"/>
+      <stop offset="100%" stop-color="#00E599"/>
+    </linearGradient>
+    <filter id="boltGlowApi" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  
+  <!-- Base Background Squircle -->
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="url(#bgGradApi)"/>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="none" stroke="url(#borderGradApi)" stroke-width="1.2"/>
+  
+  <!-- Faceted Sunveil Solar Prism -->
+  <polygon points="24,7 39,15.5 24,24 9,15.5" fill="url(#facetTopApi)"/>
+  <polygon points="39,15.5 39,32.5 24,41 24,24" fill="url(#facetRightApi)"/>
+  <polygon points="9,15.5 24,24 24,41 9,32.5" fill="url(#facetLeftApi)"/>
+  <polygon points="24,7 31.5,11.25 24,15.5 16.5,11.25" fill="url(#goldCrownApi)"/>
+  <polygon points="25.5,13 18.5,23.5 23.5,23.5 22.5,35 29.5,22.5 24.5,22.5" fill="url(#boltGradApi)" filter="url(#boltGlowApi)"/>
+</svg>
