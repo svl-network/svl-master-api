@@ -528,7 +528,7 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     },
     icon: typeof payload.icon === "string" && payload.icon.length > 0 ? payload.icon.slice(0, 100000) : (typeof (payload as any).logo === "string" ? (payload as any).logo.slice(0, 100000) : undefined),
     mods,
-    lastHeartbeat: Date.now(),
+    lastHeartbeat: 0,
     verified: isVerified,
     boosts: Math.max(0, Number(payload.boosts) || 0),
     sponsored: Boolean(payload.sponsored),
@@ -564,35 +564,18 @@ fastify.get("/api/v1/servers", {
   const activeServers: ServerPayload[] = [];
 
   for (const [key, srv] of serverStore.entries()) {
-    if (srv.lastHeartbeat && now - srv.lastHeartbeat < 90_000) {
-      const enriched = {
-        ...srv,
-        online: true,
-        modCount: srv.mods ? srv.mods.length : 0,
-        status: {
-          ...srv.status,
-          online: true
-        }
-      };
-      activeServers.push(enriched);
-    } else if (!srv.lastHeartbeat || now - srv.lastHeartbeat >= 90_000) {
-      // Auto-renew mock seed servers ONLY if they are purely synthetic (no real bridge mods)
-      if ((key === "svl_demo_realm" || key === "svl_community_realm") && (!srv.mods || srv.mods.length <= 5)) {
-        srv.lastHeartbeat = Date.now();
-        const enriched = {
-          ...srv,
-          online: true,
-          modCount: srv.mods ? srv.mods.length : 0,
-          status: {
-            ...srv.status,
-            online: true
-          }
-        };
-        activeServers.push(enriched);
-      } else {
-        serverStore.delete(key);
+    const isOnline = Boolean(srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000));
+    const enriched = {
+      ...srv,
+      online: isOnline,
+      modCount: srv.mods ? srv.mods.length : 0,
+      status: {
+        ...srv.status,
+        online: isOnline,
+        players: isOnline ? (srv.status?.players || 0) : 0
       }
-    }
+    };
+    activeServers.push(enriched);
   }
 
   return activeServers.sort((a, b) => {
@@ -907,7 +890,7 @@ const seedDemoServers = () => {
       loaderVersion: "61.2.1"
     },
     status: {
-      players: 18,
+      players: 0,
       maxPlayers: 50,
       motd: "Official High-Performance Modded Survival & Adventure Infrastructure."
     },
@@ -950,7 +933,7 @@ const seedDemoServers = () => {
         tier: "official"
       }
     ],
-    lastHeartbeat: Date.now()
+    lastHeartbeat: 0
   });
 
   serverStore.set("svl_community_realm", {
@@ -964,7 +947,7 @@ const seedDemoServers = () => {
       loaderVersion: "0.16.0"
     },
     status: {
-      players: 6,
+      players: 0,
       maxPlayers: 30,
       motd: "A chill community survival realm with quality-of-life additions."
     },
@@ -978,7 +961,7 @@ const seedDemoServers = () => {
       website: ""
     },
     mods: [],
-    lastHeartbeat: Date.now()
+    lastHeartbeat: 0
   });
 };
 
