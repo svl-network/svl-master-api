@@ -36,6 +36,7 @@ import {
   loadDatabaseFromDisk,
   saveDatabaseToDisk
 } from "./auth.js";
+import { relayServer } from "./tunnel/RelayServer.js";
 
 dotenv.config();
 
@@ -395,6 +396,20 @@ fastify.post("/api/v1/storage/upload", {
       });
     }
 
+    // Anti-Malware Inspection: Scan JAR archive for prohibited executable binary extensions
+    const fileBuffer = fs.readFileSync(tempFilePath);
+    const forbiddenExts = [".exe", ".bat", ".cmd", ".ps1", ".vbs", ".elf", ".scr", ".dll", ".so", ".msi", ".pif", ".hta", ".wsf", ".cpl", ".reg"];
+    const fileContentStr = fileBuffer.toString("latin1").toLowerCase();
+    for (const ext of forbiddenExts) {
+      if (fileContentStr.includes(ext)) {
+        fs.unlinkSync(tempFilePath);
+        return reply.status(400).send({
+          error: "Malware/Executable Prohibited",
+          message: `Security Policy Violation: JAR archive contains unauthorized executable or script payload (${ext}).`
+        });
+      }
+    }
+
     const calculatedSha256 = hash.digest("hex").toLowerCase();
     const finalFilePath = path.resolve(DATA_MODS_DIR, `${calculatedSha256}.jar`);
 
@@ -561,14 +576,27 @@ fastify.get("/api/v1/servers", {
   }
 }, async () => {
   const now = Date.now();
-  const activeServers: ServerPayload[] = [];
+  const activeServers: any[] = [];
 
   for (const [key, srv] of serverStore.entries()) {
-    const isOnline = Boolean(srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000));
+    const tunnel = relayServer.getTunnel(srv.serverKey);
+    const isOnline = Boolean((srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)) || tunnel);
+    const resolvedIp = tunnel ? tunnel.publicHost : srv.ip;
+    const resolvedPort = tunnel ? tunnel.assignedPort : srv.port;
+
     const enriched = {
       ...srv,
+      ip: resolvedIp,
+      port: resolvedPort,
       online: isOnline,
       modCount: srv.mods ? srv.mods.length : 0,
+      tunnel: tunnel ? {
+        active: true,
+        publicHost: tunnel.publicHost,
+        publicPort: tunnel.assignedPort,
+        activeClients: tunnel.activeClients,
+        connectedAt: tunnel.connectedAt
+      } : { active: false },
       status: {
         ...srv.status,
         online: isOnline,
@@ -1018,6 +1046,7 @@ const start = async () => {
     const host = process.env.HOST || "0.0.0.0";
 
     await fastify.listen({ port, host });
+    relayServer.attach(fastify.server);
     console.log(`\n🚀 SVL Master-API & Realms Portal läuft sicher auf http://localhost:${port}\n`);
   } catch (err) {
     fastify.log.error(err);
