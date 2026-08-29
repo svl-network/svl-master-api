@@ -21,7 +21,14 @@ import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const APP_ROOT = path.resolve(__dirname, "..");
 
 import {
   type User,
@@ -38,13 +45,15 @@ import {
 } from "./auth.js";
 import { relayServer } from "./tunnel/RelayServer.js";
 
-dotenv.config();
-
 const API_SECRET_KEY = process.env.API_SECRET_KEY || process.env.MASTER_API_TOKEN || "svl_secret_token_2026";
 const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || "svl_prod_sec_99a8b7c6d5";
 const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 150) * 1024 * 1024;
-const DATA_MODS_DIR = path.resolve(process.cwd(), "data", "mods");
-const PUBLIC_DIR = path.resolve(process.cwd(), "public");
+const DATA_MODS_DIR = fs.existsSync(path.resolve(process.cwd(), "data", "mods"))
+  ? path.resolve(process.cwd(), "data", "mods")
+  : path.resolve(APP_ROOT, "data", "mods");
+const PUBLIC_DIR = fs.existsSync(path.resolve(process.cwd(), "public"))
+  ? path.resolve(process.cwd(), "public")
+  : path.resolve(APP_ROOT, "public");
 
 if (!fs.existsSync(DATA_MODS_DIR)) {
   fs.mkdirSync(DATA_MODS_DIR, { recursive: true });

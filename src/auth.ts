@@ -14,9 +14,29 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY || "svl_jwt_realm_secret_2026_supersecure";
-const DB_FILE = path.resolve(process.cwd(), "data", "database.json");
+// Ensure environment variables are loaded immediately on module import
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const APP_ROOT = path.resolve(__dirname, "..");
+
+const getDbPath = (): string => {
+  const localDataDir = path.resolve(APP_ROOT, "data");
+  if (!fs.existsSync(localDataDir)) {
+    fs.mkdirSync(localDataDir, { recursive: true });
+  }
+  return path.resolve(localDataDir, "database.json");
+};
+
+const DB_FILE = getDbPath();
+
+export const getJwtSecret = (): string => {
+  return process.env.JWT_SECRET || process.env.API_SECRET_KEY || "svl_jwt_realm_secret_2026_supersecure";
+};
 
 export interface User {
   id: string;
@@ -147,7 +167,7 @@ export const generateJWT = (user: User): string => {
     email: user.email,
     licenseKey: user.licenseKey,
     iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 // 7 days expiration
+    exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600 // 30 days expiration
   };
 
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
@@ -155,7 +175,7 @@ export const generateJWT = (user: User): string => {
   const data = `${encodedHeader}.${encodedPayload}`;
 
   const signature = crypto
-    .createHmac("sha256", JWT_SECRET)
+    .createHmac("sha256", getJwtSecret())
     .update(data)
     .digest("base64")
     .replace(/=/g, "")
@@ -181,7 +201,7 @@ export const verifyJWT = (token: string): { sub: string; email: string; licenseK
     const data = `${headerB64}.${payloadB64}`;
 
     const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
+      .createHmac("sha256", getJwtSecret())
       .update(data)
       .digest("base64")
       .replace(/=/g, "")
