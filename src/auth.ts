@@ -27,6 +27,7 @@ export interface User {
   serverKey: string;
   createdAt: number;
   boosts: number;
+  lastBoostAt?: number;
   sponsored: boolean;
   bannerUrl?: string;
   links?: {

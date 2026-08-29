@@ -429,10 +429,29 @@ function renderDashboard(data) {
     }
   }
 
-  // Boosts (Real Database Counts)
+  // Boosts (Real Database Counts & Cooldown)
   const boostCountEl = document.getElementById("stat-boost-count");
   const currentBoosts = server ? (server.boosts || user.boosts || 0) : (user.boosts || user.boostCount || 0);
   if (boostCountEl) boostCountEl.innerText = currentBoosts;
+
+  const addBoostBtn = document.getElementById("btn-add-boost");
+  if (addBoostBtn) {
+    if (user.canBoost === false && user.nextBoostAt && user.nextBoostAt > Date.now()) {
+      const remainingMs = user.nextBoostAt - Date.now();
+      const hoursLeft = Math.floor(remainingMs / (60 * 60 * 1000));
+      const minutesLeft = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+      const timeStr = hoursLeft > 0 ? `${hoursLeft}h ${minutesLeft}m` : `${minutesLeft}m`;
+      addBoostBtn.disabled = true;
+      addBoostBtn.innerText = `Cooldown (${timeStr})`;
+      addBoostBtn.style.opacity = "0.6";
+      addBoostBtn.style.cursor = "not-allowed";
+    } else {
+      addBoostBtn.disabled = false;
+      addBoostBtn.innerText = "Add boost (+1)";
+      addBoostBtn.style.opacity = "1";
+      addBoostBtn.style.cursor = "pointer";
+    }
+  }
 
   const sponsoredBadge = document.getElementById("boost-sponsored-badge");
   if (sponsoredBadge) {
@@ -538,6 +557,11 @@ async function applyServerBoost(amount = 1) {
     return;
   }
 
+  const addBoostBtn = document.getElementById("btn-add-boost");
+  if (addBoostBtn) {
+    addBoostBtn.disabled = true;
+  }
+
   try {
     const res = await fetch("/api/v1/user/boost", {
       method: "POST",
@@ -548,14 +572,16 @@ async function applyServerBoost(amount = 1) {
       body: JSON.stringify({ amount })
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("Server boost added.");
+    if (res.ok && data.success) {
+      showToast(data.message || "Server boost added.");
       fetchDashboardData(false);
     } else {
-      throw new Error(data.message || "Boost failed");
+      showToast(data.message || data.error || "Boost failed.");
+      fetchDashboardData(false);
     }
   } catch (err) {
-    showToast("Failed to apply boost.");
+    showToast("Failed to apply boost: " + err.message);
+    if (addBoostBtn) addBoostBtn.disabled = false;
   }
 }
 

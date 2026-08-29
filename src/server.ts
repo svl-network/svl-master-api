@@ -756,6 +756,9 @@ fastify.get("/api/v1/user/dashboard", { preHandler: [requireUserAuth] }, async (
       createdAt: user.createdAt,
       boosts: user.boosts || 0,
       boostCount: user.boosts || 0,
+      lastBoostAt: user.lastBoostAt || null,
+      nextBoostAt: user.lastBoostAt ? user.lastBoostAt + 24 * 60 * 60 * 1000 : null,
+      canBoost: !user.lastBoostAt || (Date.now() - user.lastBoostAt >= 24 * 60 * 60 * 1000),
       sponsored: user.sponsored || false,
       bannerUrl: user.bannerUrl || (server?.bannerUrl || null),
       storeUrl: user.links?.store || (server?.links?.store || ""),
@@ -782,12 +785,51 @@ fastify.get("/api/v1/user/dashboard", { preHandler: [requireUserAuth] }, async (
   };
 });
 
-// 12. User Boost Server Action (Persisted in DB)
-fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", { preHandler: [requireUserAuth] }, async (request, reply) => {
-  const user: User = (request as any).user;
-  const amount = Math.max(1, Math.min(100, Number(request.body?.amount) || 1));
+// 12. User Boost Server Action (Persisted in DB with 24h Cooldown & Max Limit)
+const BOOST_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_SERVER_BOOSTS = 50;
 
-  user.boosts = (user.boosts || 0) + amount;
+fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", { 
+  preHandler: [requireUserAuth],
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: "1 minute"
+    }
+  }
+}, async (request, reply) => {
+  const user: User = (request as any).user;
+  const now = Date.now();
+
+  // Enforce 24-hour cooldown per account
+  if (user.lastBoostAt && (now - user.lastBoostAt < BOOST_COOLDOWN_MS)) {
+    const remainingMs = BOOST_COOLDOWN_MS - (now - user.lastBoostAt);
+    const hoursLeft = Math.floor(remainingMs / (60 * 60 * 1000));
+    const minutesLeft = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+    const timeString = hoursLeft > 0 ? `${hoursLeft}h ${minutesLeft}m` : `${minutesLeft}m`;
+
+    return reply.status(429).send({
+      success: false,
+      error: "Cooldown active",
+      message: `Cooldown aktiv: Du kannst nur alle 24 Stunden boosten. Nächster Boost in ${timeString}.`,
+      remainingMs,
+      nextBoostAt: user.lastBoostAt + BOOST_COOLDOWN_MS
+    });
+  }
+
+  // Maximum boost limit per server
+  if ((user.boosts || 0) >= MAX_SERVER_BOOSTS) {
+    return reply.status(400).send({
+      success: false,
+      error: "Max boosts reached",
+      message: `Maximales Boost-Limit (${MAX_SERVER_BOOSTS} Boosts) für diesen Server bereits erreicht.`
+    });
+  }
+
+  // Exactly 1 boost per daily action
+  user.boosts = (user.boosts || 0) + 1;
+  user.lastBoostAt = now;
+
   if (user.boosts >= 10) {
     user.sponsored = true;
   }
@@ -802,9 +844,12 @@ fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", { preHandler: 
 
   return {
     success: true,
-    message: `Added ${amount} Server Boost(s)!`,
+    message: `Server erfolgreich geboostet! (+1 Boost)`,
     boosts: user.boosts,
     boostCount: user.boosts,
+    lastBoostAt: user.lastBoostAt,
+    nextBoostAt: user.lastBoostAt + BOOST_COOLDOWN_MS,
+    canBoost: false,
     sponsored: user.sponsored
   };
 });
