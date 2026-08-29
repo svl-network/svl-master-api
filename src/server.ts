@@ -633,12 +633,16 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
     return reply.status(404).send({ error: "Server nicht gefunden oder offline." });
   }
 
+  const tunnel = relayServer.getTunnel(srv.serverKey);
+  const resolvedIp = tunnel ? tunnel.publicHost : srv.ip;
+  const resolvedPort = tunnel ? tunnel.assignedPort : srv.port;
+
   return {
     serverKey: srv.serverKey,
     name: srv.name,
     icon: srv.icon,
-    ip: srv.ip,
-    port: srv.port,
+    ip: resolvedIp,
+    port: resolvedPort,
     version: srv.version,
     verified: srv.verified,
     mods: srv.mods,
