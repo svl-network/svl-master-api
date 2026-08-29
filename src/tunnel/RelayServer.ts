@@ -21,9 +21,9 @@ export interface ActiveTunnel {
   bytesReceived: number;
   bytesSent: number;
   activeClients: number;
-  tcpServer: net.Server;
   ws: WebSocket;
   clientSockets: Map<number, net.Socket>;
+  tcpServer?: net.Server;
 }
 
 // Packet Types for Multiplexed Tunnel
@@ -35,8 +35,8 @@ const PKT_PONG = 0x05;
 
 // Security Limits & Anti-Abuse
 const MAX_PACKET_SIZE = 2 * 1024 * 1024; // 2 MB max packet size
-const MAX_CONCURRENT_CLIENTS_PER_TUNNEL = 60;
-const MAX_CONN_PER_IP_WINDOW = 25; // Max 25 connection handshakes per minute per IP
+const MAX_CONCURRENT_CLIENTS_PER_TUNNEL = 100;
+const MAX_CONN_PER_IP_WINDOW = 40; // Max 40 connection handshakes per minute per IP
 const RATE_WINDOW_MS = 60 * 1000;
 
 /**
@@ -61,51 +61,139 @@ function readVarInt(buffer: Buffer, offset: number): { value: number; bytesRead:
 }
 
 /**
- * Strict Minecraft Protocol Handshake Validator
- * Ensures only legitimate Minecraft Java Edition game traffic is forwarded through the tunnel.
- * Blocks HTTP, SSH, Telnet, SOCKS proxies, Port Scans, Malware C2, and Raw Exploits.
+ * Writes a Minecraft VarInt into a buffer
  */
-function isValidMinecraftHandshake(buffer: Buffer): boolean {
-  if (!buffer || buffer.length < 2) return false;
+function writeVarInt(value: number): Buffer {
+  const bytes: number[] = [];
+  let val = value;
+  do {
+    let temp = val & 0x7f;
+    val >>>= 7;
+    if (val !== 0) {
+      temp |= 0x80;
+    }
+    bytes.push(temp);
+  } while (val !== 0);
+  return Buffer.from(bytes);
+}
 
-  // Legacy Minecraft Ping format (1.6 and below): 0xFE (Legacy Server List Ping)
-  if (buffer[0] === 0xFE) return true;
+/**
+ * Parsed Minecraft Handshake details
+ */
+interface MinecraftHandshake {
+  valid: boolean;
+  hostname: string;
+  port: number;
+  nextState: number; // 1 = Status/Ping, 2 = Login
+  protocolVersion: number;
+}
 
-  // Modern Minecraft Handshake packet:
-  // [VarInt: length][VarInt: packetID (0x00)][VarInt: protocolVersion][VarInt: stringLength][utf8 string: address][unsigned short: port][VarInt: nextState (1 or 2)]
+/**
+ * Strict Minecraft Protocol Handshake Parser & Validator
+ */
+function parseMinecraftHandshake(buffer: Buffer): MinecraftHandshake | null {
+  if (!buffer || buffer.length < 2) return null;
+
+  // Legacy Minecraft Ping format (1.6 and below)
+  if (buffer[0] === 0xFE) {
+    return { valid: true, hostname: "", port: 25565, nextState: 1, protocolVersion: 0 };
+  }
+
   let offset = 0;
   const pktLen = readVarInt(buffer, offset);
-  if (!pktLen || pktLen.value <= 0 || pktLen.value > 1024) return false;
+  if (!pktLen || pktLen.value <= 0 || pktLen.value > 1024) return null;
   offset += pktLen.bytesRead;
 
   const pktId = readVarInt(buffer, offset);
-  if (!pktId || pktId.value !== 0x00) return false; // Handshake packet ID MUST be 0x00
+  if (!pktId || pktId.value !== 0x00) return null; // Handshake packet ID MUST be 0x00
   offset += pktId.bytesRead;
 
   const protocolVersion = readVarInt(buffer, offset);
-  if (!protocolVersion) return false;
+  if (!protocolVersion) return null;
   offset += protocolVersion.bytesRead;
 
   const hostLength = readVarInt(buffer, offset);
-  if (!hostLength || hostLength.value < 0 || hostLength.value > 255) return false;
+  if (!hostLength || hostLength.value < 0 || hostLength.value > 255) return null;
   offset += hostLength.bytesRead;
 
-  if (buffer.length < offset + hostLength.value + 2) return false;
-  offset += hostLength.value + 2; // Host string + 2 bytes unsigned short port
+  if (buffer.length < offset + hostLength.value + 2) return null;
+
+  let rawHost = buffer.subarray(offset, offset + hostLength.value).toString("utf8");
+  // Clean up Forge/FML tags (e.g. "server.domain.com\0FML\0")
+  if (rawHost.includes("\0")) {
+    rawHost = rawHost.split("\0")[0] || "";
+  }
+  rawHost = rawHost.toLowerCase().trim();
+  if (rawHost.endsWith(".")) {
+    rawHost = rawHost.slice(0, -1);
+  }
+
+  offset += hostLength.value;
+  const port = buffer.readUInt16BE(offset);
+  offset += 2;
 
   const nextState = readVarInt(buffer, offset);
-  if (!nextState || (nextState.value !== 1 && nextState.value !== 2)) return false; // 1 = Status/Ping, 2 = Login
+  if (!nextState || (nextState.value !== 1 && nextState.value !== 2)) return null;
 
-  return true;
+  return {
+    valid: true,
+    hostname: rawHost,
+    port,
+    nextState: nextState.value,
+    protocolVersion: protocolVersion.value
+  };
+}
+
+/**
+ * Creates a Minecraft disconnect packet for players attempting to join an offline or unknown realm
+ */
+function createDisconnectPacket(message: string): Buffer {
+  const jsonPayload = JSON.stringify({
+    text: `§c[Sunveil Network] §f${message}`,
+    color: "red"
+  });
+  const jsonBuf = Buffer.from(jsonPayload, "utf8");
+  const jsonLenBuf = writeVarInt(jsonBuf.length);
+  const packetIdBuf = writeVarInt(0x00); // Disconnect (Login)
+
+  const packetContent = Buffer.concat([packetIdBuf, jsonLenBuf, jsonBuf]);
+  const packetLenBuf = writeVarInt(packetContent.length);
+
+  return Buffer.concat([packetLenBuf, packetContent]);
+}
+
+/**
+ * Creates a Minecraft server list ping response for status requests to unknown/offline realms
+ */
+function createStatusResponsePacket(hostname: string): Buffer {
+  const statusPayload = JSON.stringify({
+    version: { name: "Sunveil Relay", protocol: 767 },
+    players: { max: 0, online: 0 },
+    description: { text: `§eSunveil Realm §7(${hostname}) §c[Offline]\n§7Starte deinen Server mit dem SVL-Bridge Plugin.` }
+  });
+  const jsonBuf = Buffer.from(statusPayload, "utf8");
+  const jsonLenBuf = writeVarInt(jsonBuf.length);
+  const packetIdBuf = writeVarInt(0x00); // Status Response
+
+  const packetContent = Buffer.concat([packetIdBuf, jsonLenBuf, jsonBuf]);
+  const packetLenBuf = writeVarInt(packetContent.length);
+
+  return Buffer.concat([packetLenBuf, packetContent]);
 }
 
 export class RelayServer {
   private wss: WebSocketServer | null = null;
   private activeTunnels = new Map<string, ActiveTunnel>(); // serverKey -> ActiveTunnel
   private portToTunnel = new Map<number, string>(); // port -> serverKey
+
+  // SNI Central Relay on Standard Minecraft Port (25565)
+  private centralServer: net.Server | null = null;
+  private centralPort = Number(process.env.TUNNEL_MAIN_PORT) || 25565;
+  private publicDomain = process.env.TUNNEL_PUBLIC_DOMAIN || "realms.sunveil.net";
+
+  // Dedicated Port Pool (Fallback)
   private minPort = Number(process.env.TUNNEL_PORT_MIN) || 25600;
   private maxPort = Number(process.env.TUNNEL_PORT_MAX) || 25700;
-  private publicHost = process.env.TUNNEL_PUBLIC_HOST || "realms.sunveil.net";
   private connectionCounter = 1;
 
   // Anti-Botting and Flood Protection
@@ -124,6 +212,110 @@ export class RelayServer {
         }
       }
     }, 2 * 60 * 1000);
+
+    // Initialize the Central SNI Router on standard Minecraft port (25565)
+    this.startCentralRouter();
+  }
+
+  /**
+   * Starts the central hostname-based Minecraft TCP Router on port 25565
+   */
+  private startCentralRouter() {
+    this.centralServer = net.createServer((clientSocket) => {
+      const clientIp = clientSocket.remoteAddress || "unknown";
+
+      if (this.isIpRateLimited(clientIp)) {
+        clientSocket.destroy();
+        return;
+      }
+
+      let isHandshakeHandled = false;
+      let handshakeBuffer = Buffer.alloc(0);
+
+      clientSocket.on("data", (chunk: Buffer) => {
+        if (isHandshakeHandled) return;
+
+        if (chunk.length > MAX_PACKET_SIZE) {
+          clientSocket.destroy();
+          return;
+        }
+
+        handshakeBuffer = Buffer.concat([handshakeBuffer, chunk]);
+        const handshake = parseMinecraftHandshake(handshakeBuffer);
+
+        if (!handshake) {
+          if (handshakeBuffer.length > 1024) {
+            clientSocket.destroy();
+          }
+          return; // Wait for full packet
+        }
+
+        isHandshakeHandled = true;
+
+        // Resolve target tunnel by requested hostname/subdomain
+        const tunnel = this.findTunnelByHost(handshake.hostname);
+
+        if (!tunnel || !tunnel.ws || tunnel.ws.readyState !== WebSocket.OPEN) {
+          // Realm is offline or not found
+          if (handshake.nextState === 1) {
+            // Status Ping response
+            clientSocket.write(createStatusResponsePacket(handshake.hostname || "unknown"));
+          } else {
+            // Login Disconnect response
+            clientSocket.write(createDisconnectPacket(`Realm '${handshake.hostname}' ist offline oder existiert nicht.`));
+          }
+          setTimeout(() => clientSocket.destroy(), 500);
+          return;
+        }
+
+        // Attach client socket to the resolved tunnel
+        this.attachClientToTunnel(tunnel, clientSocket, handshakeBuffer);
+      });
+
+      clientSocket.on("error", () => {
+        clientSocket.destroy();
+      });
+    });
+
+    this.centralServer.listen(this.centralPort, "0.0.0.0", () => {
+      console.log(`🌐 [SVL-Relay] Central Hostname/SNI Router active on port :${this.centralPort} (Unlimited Realms support)`);
+    });
+
+    this.centralServer.on("error", (err: any) => {
+      console.warn(`⚠️ [SVL-Relay] Central port :${this.centralPort} unavailable (${err.message}). Falling back to dedicated port pool.`);
+    });
+  }
+
+  /**
+   * Resolves an ActiveTunnel by hostname (e.g. "smp.realms.sunveil.net", "realm_abc.sunveil.net", or "smp")
+   */
+  private findTunnelByHost(hostname: string): ActiveTunnel | undefined {
+    if (!hostname) return undefined;
+
+    // 1. Direct match on serverKey
+    if (this.activeTunnels.has(hostname)) {
+      return this.activeTunnels.get(hostname);
+    }
+
+    // 2. Extract subdomain (e.g. "smp" from "smp.realms.sunveil.net" or "smp.sunveil.net")
+    const parts = hostname.split(".");
+    if (parts.length > 0 && parts[0]) {
+      const subdomain = parts[0];
+      if (this.activeTunnels.has(subdomain)) {
+        return this.activeTunnels.get(subdomain);
+      }
+    }
+
+    // 3. Normalized search
+    const cleanHost = hostname.replace(/[^a-z0-9_-]/gi, "").toLowerCase();
+    for (const [key, tunnel] of this.activeTunnels.entries()) {
+      const cleanKey = key.replace(/[^a-z0-9_-]/gi, "").toLowerCase();
+      if (cleanHost === cleanKey || cleanHost.startsWith(cleanKey)) {
+        return tunnel;
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -170,7 +362,7 @@ export class RelayServer {
       this.handleTunnelConnection(ws, serverKey);
     });
 
-    console.log(`🛡️ Sunveil Secure Relay Tunnel initialized (Port pool: ${this.minPort}-${this.maxPort})`);
+    console.log(`🛡️ Sunveil Secure Relay Tunnel initialized (SNI Router + Pool ${this.minPort}-${this.maxPort})`);
   }
 
   /**
@@ -186,105 +378,101 @@ export class RelayServer {
   }
 
   /**
-   * Handles incoming WebSocket connection from a Minecraft server Bridge
+   * Attaches an incoming player socket to a tunnel
    */
-  private handleTunnelConnection(ws: WebSocket, serverKey: string) {
-    // Clean up any previous tunnel for this serverKey
-    this.closeTunnel(serverKey);
-
-    const port = this.allocatePort();
-    if (!port) {
-      ws.close(1013, "No available tunnel ports in pool");
+  private attachClientToTunnel(tunnel: ActiveTunnel, clientSocket: net.Socket, initialPayload: Buffer) {
+    if (tunnel.clientSockets.size >= MAX_CONCURRENT_CLIENTS_PER_TUNNEL) {
+      clientSocket.destroy();
       return;
     }
 
+    const connId = this.connectionCounter++;
+    tunnel.clientSockets.set(connId, clientSocket);
+    tunnel.activeClients = tunnel.clientSockets.size;
+
+    // Send PKT_OPEN to Bridge
+    const openFrame = Buffer.alloc(5);
+    openFrame.writeUInt8(PKT_OPEN, 0);
+    openFrame.writeUInt32BE(connId, 1);
+    if (tunnel.ws.readyState === WebSocket.OPEN) {
+      tunnel.ws.send(openFrame);
+    }
+
+    // Send initial handshake payload
+    const header = Buffer.alloc(5);
+    header.writeUInt8(PKT_DATA, 0);
+    header.writeUInt32BE(connId, 1);
+    tunnel.ws.send(Buffer.concat([header, initialPayload]));
+    tunnel.bytesReceived += initialPayload.length;
+
+    // Forward stream data
+    clientSocket.on("data", (chunk: Buffer) => {
+      if (tunnel.ws.readyState === WebSocket.OPEN) {
+        const frameHeader = Buffer.alloc(5);
+        frameHeader.writeUInt8(PKT_DATA, 0);
+        frameHeader.writeUInt32BE(connId, 1);
+        tunnel.ws.send(Buffer.concat([frameHeader, chunk]));
+        tunnel.bytesReceived += chunk.length;
+      }
+    });
+
+    clientSocket.on("close", () => {
+      tunnel.clientSockets.delete(connId);
+      tunnel.activeClients = tunnel.clientSockets.size;
+      if (tunnel.ws.readyState === WebSocket.OPEN) {
+        const closeFrame = Buffer.alloc(5);
+        closeFrame.writeUInt8(PKT_CLOSE, 0);
+        closeFrame.writeUInt32BE(connId, 1);
+        tunnel.ws.send(closeFrame);
+      }
+    });
+
+    clientSocket.on("error", () => {
+      clientSocket.destroy();
+    });
+  }
+
+  /**
+   * Handles incoming WebSocket connection from a Minecraft server Bridge
+   */
+  private handleTunnelConnection(ws: WebSocket, serverKey: string) {
+    this.closeTunnel(serverKey);
+
+    const port = this.allocatePort() || 25600;
     const clientSockets = new Map<number, net.Socket>();
 
+    // Dedicated fallback TCP Server for this specific server
     const tcpServer = net.createServer((clientSocket) => {
       const clientIp = clientSocket.remoteAddress || "unknown";
 
-      // 1. Anti-Botting & Flood Protection Check
       if (this.isIpRateLimited(clientIp)) {
-        console.warn(`🛡️ [SVL-Tunnel] Dropped flood/botting connection from ${clientIp} on '${serverKey}'`);
         clientSocket.destroy();
         return;
       }
-
-      const tunnel = this.activeTunnels.get(serverKey);
-      if (!tunnel || clientSockets.size >= MAX_CONCURRENT_CLIENTS_PER_TUNNEL) {
-        clientSocket.destroy();
-        return;
-      }
-
-      const connId = this.connectionCounter++;
-      clientSockets.set(connId, clientSocket);
-      tunnel.activeClients = clientSockets.size;
 
       let isHandshakeVerified = false;
       let handshakeBuffer = Buffer.alloc(0);
 
-      // 2. Client Traffic Inspection & Forwarding
       clientSocket.on("data", (chunk: Buffer) => {
-        // Enforce max packet size limit
+        if (isHandshakeVerified) return;
+
         if (chunk.length > MAX_PACKET_SIZE) {
-          console.warn(`🛡️ [SVL-Tunnel] Oversized packet from ${clientIp} on '${serverKey}'. Terminating.`);
           clientSocket.destroy();
           return;
         }
 
-        // 3. Strict Minecraft Protocol Inspection on Initial Handshake
-        if (!isHandshakeVerified) {
-          handshakeBuffer = Buffer.concat([handshakeBuffer, chunk]);
+        handshakeBuffer = Buffer.concat([handshakeBuffer, chunk]);
+        const handshake = parseMinecraftHandshake(handshakeBuffer);
 
-          // Verify if the initial payload is a valid Minecraft Handshake
-          if (!isValidMinecraftHandshake(handshakeBuffer)) {
-            // Give up to 1024 bytes to form the handshake; if invalid, reject non-Minecraft traffic immediately
-            if (handshakeBuffer.length > 1024 || (handshakeBuffer.length >= 3 && handshakeBuffer[0] !== 0xFE && handshakeBuffer[1] !== 0x00)) {
-              console.warn(`🛡️ [SVL-Tunnel] Blocked NON-MINECRAFT payload (Malware/Proxy/Scan) from ${clientIp} on '${serverKey}'`);
-              clientSocket.destroy();
-              return;
-            }
-            return; // Wait for full handshake frame
+        if (!handshake) {
+          if (handshakeBuffer.length > 1024) {
+            clientSocket.destroy();
           }
-
-          isHandshakeVerified = true;
-
-          // Open frame to Bridge once verified as legitimate Minecraft connection
-          const openFrame = Buffer.alloc(5);
-          openFrame.writeUInt8(PKT_OPEN, 0);
-          openFrame.writeUInt32BE(connId, 1);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(openFrame);
-          }
-
-          // Forward verified handshake payload
-          const header = Buffer.alloc(5);
-          header.writeUInt8(PKT_DATA, 0);
-          header.writeUInt32BE(connId, 1);
-          ws.send(Buffer.concat([header, handshakeBuffer]));
-          tunnel.bytesReceived += handshakeBuffer.length;
           return;
         }
 
-        // Forward subsequent Minecraft stream data
-        if (ws.readyState === WebSocket.OPEN) {
-          const header = Buffer.alloc(5);
-          header.writeUInt8(PKT_DATA, 0);
-          header.writeUInt32BE(connId, 1);
-          ws.send(Buffer.concat([header, chunk]));
-          tunnel.bytesReceived += chunk.length;
-        }
-      });
-
-      clientSocket.on("close", () => {
-        clientSockets.delete(connId);
-        if (tunnel) tunnel.activeClients = clientSockets.size;
-        if (isHandshakeVerified && ws.readyState === WebSocket.OPEN) {
-          const closeFrame = Buffer.alloc(5);
-          closeFrame.writeUInt8(PKT_CLOSE, 0);
-          closeFrame.writeUInt32BE(connId, 1);
-          ws.send(closeFrame);
-        }
+        isHandshakeVerified = true;
+        this.attachClientToTunnel(tunnel, clientSocket, handshakeBuffer);
       });
 
       clientSocket.on("error", () => {
@@ -293,13 +481,15 @@ export class RelayServer {
     });
 
     tcpServer.listen(port, "0.0.0.0", () => {
-      console.log(`🛡️ [SVL-Tunnel] Server '${serverKey}' protected & bound to public relay port :${port}`);
+      console.log(`🛡️ [SVL-Tunnel] Realm '${serverKey}' online: ${serverKey}.${this.publicDomain} (:25565) & Fallback :${port}`);
     });
+
+    const realmDomain = `${serverKey}.${this.publicDomain}`;
 
     const tunnel: ActiveTunnel = {
       serverKey,
       assignedPort: port,
-      publicHost: this.publicHost,
+      publicHost: realmDomain,
       connectedAt: Date.now(),
       bytesReceived: 0,
       bytesSent: 0,
@@ -316,8 +506,9 @@ export class RelayServer {
     const welcomeMsg = JSON.stringify({
       type: "TUNNEL_READY",
       serverKey,
-      publicHost: this.publicHost,
-      publicPort: port,
+      publicHost: realmDomain,
+      publicPort: this.centralPort, // Standard port 25565
+      fallbackPort: port,
       timestamp: Date.now()
     });
     ws.send(welcomeMsg);
@@ -352,7 +543,7 @@ export class RelayServer {
     });
 
     ws.on("close", () => {
-      console.log(`🛡️ [SVL-Tunnel] Bridge disconnected for '${serverKey}'. Freeing port :${port}`);
+      console.log(`🛡️ [SVL-Tunnel] Bridge disconnected for '${serverKey}'.`);
       this.closeTunnel(serverKey);
     });
 
@@ -374,9 +565,11 @@ export class RelayServer {
     }
     tunnel.clientSockets.clear();
 
-    try {
-      tunnel.tcpServer.close();
-    } catch {}
+    if (tunnel.tcpServer) {
+      try {
+        tunnel.tcpServer.close();
+      } catch {}
+    }
 
     this.portToTunnel.delete(tunnel.assignedPort);
     this.activeTunnels.delete(serverKey);
