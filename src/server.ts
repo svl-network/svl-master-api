@@ -528,7 +528,7 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     },
     icon: typeof payload.icon === "string" && payload.icon.length > 0 ? payload.icon.slice(0, 100000) : (typeof (payload as any).logo === "string" ? (payload as any).logo.slice(0, 100000) : undefined),
     mods,
-    lastHeartbeat: 0,
+    lastHeartbeat: Date.now(),
     verified: isVerified,
     boosts: Math.max(0, Number(payload.boosts) || 0),
     sponsored: Boolean(payload.sponsored),
