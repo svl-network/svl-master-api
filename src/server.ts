@@ -59,7 +59,12 @@ import {
   saveDatabaseToDisk,
   saveLicensesToDisk,
   getDataDir,
-  findUserByIdentifier
+  findUserByIdentifier,
+  checkAdminIpLockout,
+  recordAdminFailedAttempt,
+  recordAdminSuccess,
+  unblockAdminIp,
+  adminIpLockoutMap
 } from "./auth.js";
 import { relayServer } from "./tunnel/RelayServer.js";
 
@@ -511,21 +516,47 @@ const requireAuth = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 };
 
-// Hardened Secret Admin Authentication Pre-Handler
+const getClientIp = (req: FastifyRequest): string => {
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim().length > 0) return cfIp.trim();
+  const xRealIp = req.headers["x-real-ip"];
+  if (typeof xRealIp === "string" && xRealIp.trim().length > 0) return xRealIp.trim();
+  const xForwardedFor = req.headers["x-forwarded-for"];
+  if (typeof xForwardedFor === "string" && xForwardedFor.trim().length > 0) {
+    return xForwardedFor.split(",")[0]!.trim();
+  }
+  return req.ip || "unknown";
+};
+
+// Hardened Secret Admin Authentication Pre-Handler with Brute-Force & IP Lockout Sentinel
 const requireAdminAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+  const clientIp = getClientIp(request);
+
+  // 1. Check if IP is currently locked out
+  const lockout = checkAdminIpLockout(clientIp);
+  if (lockout.locked) {
+    return reply.status(429).send({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Administrative access locked out for your IP (${clientIp}) due to repeated unauthorized attempts. Try again in ${Math.ceil(lockout.remainingSeconds / 60)} minutes.`,
+      remainingSeconds: lockout.remainingSeconds
+    });
+  }
+
   const adminSecretHeader = request.headers["x-svl-admin-secret"];
   if (typeof adminSecretHeader === "string" && verifyAdminSecret(adminSecretHeader)) {
     (request as any).adminActor = "header_master_secret";
+    recordAdminSuccess(clientIp);
     return;
   }
 
-  // 1. Check HttpOnly Cookie
+  // 2. Check HttpOnly Cookie
   let token: string | undefined;
   if (request.cookies && request.cookies.svl_admin_session) {
     token = request.cookies.svl_admin_session;
   }
 
-  // 2. Fallback to Authorization Bearer header
+  // 3. Fallback to Authorization Bearer header
   if (!token) {
     const authHeader = request.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -536,17 +567,30 @@ const requireAdminAuth = async (request: FastifyRequest, reply: FastifyReply) =>
   if (token) {
     if (verifyAdminSecret(token)) {
       (request as any).adminActor = "bearer_master_secret";
+      recordAdminSuccess(clientIp);
       return;
     }
 
     const decoded = verifyJWT(token);
     if (decoded && (decoded.role === "admin" || (decoded as any).actor)) {
       (request as any).adminActor = decoded.email || (decoded as any).actor || "admin";
+      recordAdminSuccess(clientIp);
       return;
     }
   }
 
-  logAdminAction("UNAUTHORIZED_ACCESS_ATTEMPT", request.url, "unknown", request.ip, "Blocked invalid admin credentials");
+  const failState = recordAdminFailedAttempt(clientIp, "unauthorized_probe");
+  logAdminAction("UNAUTHORIZED_ACCESS_ATTEMPT", request.url, "unknown", clientIp, `Blocked invalid admin credentials (Attempt ${failState.failures})`);
+
+  if (failState.locked) {
+    return reply.status(429).send({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Too many unauthorized attempts. Your IP (${clientIp}) has been temporarily locked out for ${Math.ceil(failState.remainingSeconds / 60)} minutes.`,
+      remainingSeconds: failState.remainingSeconds
+    });
+  }
+
   return reply.status(403).send({
     statusCode: 403,
     error: "Forbidden",
@@ -1793,25 +1837,51 @@ fastify.get("/api/tebex/webhook", async () => ({
 fastify.post<{ Body: { secretKey?: string; password?: string } }>("/api/v1/admin/auth", {
   config: {
     rateLimit: {
-      max: 5,
+      max: 10,
       timeWindow: "1 minute"
     }
   }
 }, async (request, reply) => {
+  const clientIp = getClientIp(request);
+
+  // 1. Check IP Lockout
+  const lockout = checkAdminIpLockout(clientIp);
+  if (lockout.locked) {
+    return reply.status(429).send({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Administrative access locked out for your IP (${clientIp}). Try again in ${Math.ceil(lockout.remainingSeconds / 60)} minutes.`,
+      remainingSeconds: lockout.remainingSeconds
+    });
+  }
+
   const { secretKey, password } = request.body || {};
   const candidate = (secretKey || password || "").trim();
 
   if (!candidate || !verifyAdminSecret(candidate)) {
-    logAdminAction("FAILED_ADMIN_LOGIN", "/api/v1/admin/auth", "anonymous", request.ip, "Invalid master secret entered");
+    const failState = recordAdminFailedAttempt(clientIp, "failed_admin_login");
+    logAdminAction("FAILED_ADMIN_LOGIN", "/api/v1/admin/auth", "anonymous", clientIp, `Invalid master secret (Attempt ${failState.failures})`);
+
+    if (failState.locked) {
+      return reply.status(429).send({
+        statusCode: 429,
+        error: "Too Many Requests",
+        message: `Too many failed login attempts. Your IP (${clientIp}) has been locked out for ${Math.ceil(failState.remainingSeconds / 60)} minutes.`,
+        remainingSeconds: failState.remainingSeconds
+      });
+    }
+
     return reply.status(401).send({
       statusCode: 401,
       error: "Unauthorized",
-      message: "Invalid Administrative Secret."
+      message: "Invalid Administrative Secret.",
+      attemptsRemaining: Math.max(0, 5 - failState.failures)
     });
   }
 
+  recordAdminSuccess(clientIp);
   const token = generateAdminJWT("root_admin");
-  logAdminAction("ADMIN_LOGIN_SUCCESS", "Admin Session", "root_admin", request.ip, "Elevated admin session granted");
+  logAdminAction("ADMIN_LOGIN_SUCCESS", "Admin Session", "root_admin", clientIp, "Elevated admin session granted");
 
   const isHttps = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
   reply.setCookie("svl_admin_session", token, {
@@ -1833,6 +1903,31 @@ fastify.post<{ Body: { secretKey?: string; password?: string } }>("/api/v1/admin
 fastify.post("/api/v1/admin/logout", async (request, reply) => {
   reply.clearCookie("svl_admin_session", { path: "/" });
   return { success: true, message: "Admin session cleared." };
+});
+
+// Admin Security Management - View Active Lockouts
+fastify.get("/api/v1/admin/security/lockouts", { preHandler: [requireAdminAuth] }, async () => {
+  const now = Date.now();
+  const lockouts = Array.from(adminIpLockoutMap.entries()).map(([ip, state]) => ({
+    ip,
+    failures: state.failures,
+    isLocked: Boolean(state.lockedUntil && now < state.lockedUntil),
+    remainingSeconds: state.lockedUntil && now < state.lockedUntil ? Math.ceil((state.lockedUntil - now) / 1000) : 0,
+    lastAttempt: state.lastAttempt
+  }));
+  return { success: true, lockouts };
+});
+
+// Admin Security Management - Unblock IP
+fastify.post<{ Body: { ip: string } }>("/api/v1/admin/security/unblock", { preHandler: [requireAdminAuth] }, async (request, reply) => {
+  const { ip } = request.body || {};
+  if (!ip) {
+    return reply.status(400).send({ error: "IP address is required." });
+  }
+  const actor = (request as any).adminActor || "admin";
+  const unblocked = unblockAdminIp(ip);
+  logAdminAction("ADMIN_IP_UNBLOCK", ip, actor, getClientIp(request), `Manually unblocked by ${actor}`);
+  return { success: true, unblocked, ip };
 });
 
 fastify.get("/api/v1/admin/overview", { preHandler: [requireAdminAuth] }, async () => {

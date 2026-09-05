@@ -535,6 +535,88 @@ export const getBootstrapAdminSecret = (): string => {
   return dynamicAdminSecret;
 };
 
+export interface IpLockoutState {
+  failures: number;
+  lockedUntil?: number | undefined;
+  lastAttempt: number;
+}
+
+export const adminIpLockoutMap = new Map<string, IpLockoutState>();
+
+/**
+ * Checks if an IP is currently locked out from administrative access
+ */
+export const checkAdminIpLockout = (ip: string): { locked: boolean; remainingSeconds: number; failures: number } => {
+  if (!ip || ip === "127.0.0.1" || ip === "localhost") return { locked: false, remainingSeconds: 0, failures: 0 };
+  const cleanIp = ip.trim();
+  const state = adminIpLockoutMap.get(cleanIp);
+  if (!state) return { locked: false, remainingSeconds: 0, failures: 0 };
+
+  const now = Date.now();
+  if (state.lockedUntil && now < state.lockedUntil) {
+    const remainingSeconds = Math.ceil((state.lockedUntil - now) / 1000);
+    return { locked: true, remainingSeconds, failures: state.failures };
+  }
+
+  // Decay lockout after expiration
+  if (state.lockedUntil && now >= state.lockedUntil) {
+    state.lockedUntil = undefined;
+    state.failures = Math.min(state.failures, 2);
+  }
+
+  return { locked: false, remainingSeconds: 0, failures: state.failures };
+};
+
+/**
+ * Records a failed administrative login or unauthorized probe attempt
+ */
+export const recordAdminFailedAttempt = (ip: string, actor = "unknown"): { locked: boolean; remainingSeconds: number; failures: number } => {
+  if (!ip || ip === "127.0.0.1" || ip === "localhost") return { locked: false, remainingSeconds: 0, failures: 1 };
+  const cleanIp = ip.trim();
+  const now = Date.now();
+  let state = adminIpLockoutMap.get(cleanIp);
+  if (!state) {
+    state = { failures: 0, lastAttempt: now };
+    adminIpLockoutMap.set(cleanIp, state);
+  }
+
+  // Decay failures if more than 30 minutes since last attempt
+  if (now - state.lastAttempt > 30 * 60 * 1000) {
+    state.failures = 0;
+  }
+
+  state.failures += 1;
+  state.lastAttempt = now;
+
+  const MAX_FAILURES = 5;
+  if (state.failures >= MAX_FAILURES) {
+    // 5 attempts -> 30 mins lockout; 10+ attempts -> 24 hours lockout
+    const lockoutMinutes = state.failures >= 10 ? 24 * 60 : 30;
+    state.lockedUntil = now + lockoutMinutes * 60 * 1000;
+    logAdminAction("ADMIN_IP_LOCKOUT", cleanIp, actor, cleanIp, `Locked out for ${lockoutMinutes}m due to ${state.failures} failed attempts`);
+    return { locked: true, remainingSeconds: lockoutMinutes * 60, failures: state.failures };
+  }
+
+  return { locked: false, remainingSeconds: 0, failures: state.failures };
+};
+
+/**
+ * Clears lockout and failure count on successful authentication
+ */
+export const recordAdminSuccess = (ip: string) => {
+  if (ip) {
+    adminIpLockoutMap.delete(ip.trim());
+  }
+};
+
+/**
+ * Manually unblocks an IP address
+ */
+export const unblockAdminIp = (ip: string): boolean => {
+  if (!ip) return false;
+  return adminIpLockoutMap.delete(ip.trim());
+};
+
 /**
  * Timing-safe admin token verifier against environment master secrets
  */
