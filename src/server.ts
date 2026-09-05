@@ -345,6 +345,25 @@ export function validateSubdomainOrKey(name: string): { valid: boolean; error?: 
   if (RESERVED_SUBDOMAINS.has(clean)) {
     return { valid: false, error: `'${clean}' is a reserved system keyword and cannot be used.` };
   }
+
+  // Security: Disallow using Master API Secret or sensitive tokens as a public serverKey/subdomain
+  const sensitiveTokens = [
+    (process.env.API_SECRET_KEY || "").toLowerCase(),
+    (process.env.MASTER_API_TOKEN || "").toLowerCase(),
+    (process.env.JWT_SECRET || "").toLowerCase(),
+    "svl_secret_token_2026"
+  ].filter(t => t.length > 0);
+
+  for (const secret of sensitiveTokens) {
+    if (clean === secret || (secret.length >= 6 && clean.includes(secret))) {
+      return { valid: false, error: "Security violation: Server key cannot match or contain system master tokens." };
+    }
+  }
+
+  if (clean.includes("secret") || clean.includes("apikey") || clean.includes("token_master")) {
+    return { valid: false, error: "Security violation: Server key contains prohibited security keywords." };
+  }
+
   return { valid: true };
 }
 
