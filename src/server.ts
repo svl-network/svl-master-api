@@ -323,6 +323,58 @@ export function isValidToken(token: string): boolean {
   return false;
 }
 
+export const RESERVED_SUBDOMAINS = new Set([
+  "api", "admin", "administrator", "realms", "realm", "dash", "dashboard",
+  "auth", "login", "register", "ws", "relay", "direct", "mail", "email",
+  "cdn", "sunveil", "svl", "www", "proxy", "tunnel", "status", "bot",
+  "ping", "root", "support", "test", "help", "app", "system", "connect",
+  "minecraft", "mc", "server", "nodes", "edge", "master", "modrinth"
+]);
+
+export function validateSubdomainOrKey(name: string): { valid: boolean; error?: string } {
+  if (!name || typeof name !== "string") {
+    return { valid: false, error: "Subdomain or Server Key is required." };
+  }
+  const clean = name.trim().toLowerCase();
+  if (clean.length < 3 || clean.length > 32) {
+    return { valid: false, error: "Must be between 3 and 32 characters long." };
+  }
+  if (!/^[a-z0-9][a-z0-9_-]*[a-z0-9]$/i.test(clean) && !/^[a-z0-9]{3,32}$/i.test(clean)) {
+    return { valid: false, error: "Only letters, numbers, hyphens, and underscores are allowed." };
+  }
+  if (RESERVED_SUBDOMAINS.has(clean)) {
+    return { valid: false, error: `'${clean}' is a reserved system keyword and cannot be used.` };
+  }
+  return { valid: true };
+}
+
+export function isServerKeyClaimed(serverKey: string, currentUserId?: string): boolean {
+  const cleanKey = serverKey.trim().toLowerCase();
+
+  // Check userStore
+  for (const u of userStore.values()) {
+    if (currentUserId && u.id === currentUserId) continue;
+    if (u.serverKey && u.serverKey.toLowerCase() === cleanKey) return true;
+    if (u.licenseKey && u.licenseKey.toLowerCase() === cleanKey) return true;
+  }
+
+  // Check serverStore
+  for (const [key, srv] of serverStore.entries()) {
+    if (key.toLowerCase() === cleanKey) {
+      if (currentUserId) {
+        const ownerHash = serverOwnerStore.get(key);
+        const currentUser = userIdStore.get(currentUserId);
+        if (currentUser && ownerHash && (ownerHash === hashToken(currentUser.licenseKey) || ownerHash === hashToken(currentUser.serverKey))) {
+          continue;
+        }
+      }
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // Bearer Token Authentication Pre-Handler
 const requireAuth = async (request: FastifyRequest, reply: FastifyReply) => {
   const authHeader = request.headers.authorization;
@@ -936,10 +988,68 @@ fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", {
   };
 });
 
-// 13. User Settings Action (Custom Banner & Direct Links Persisted in DB)
-fastify.post<{ Body: { bannerUrl?: string; storeUrl?: string; discordInvite?: string; links?: { store?: string; discord?: string; website?: string } } }>("/api/v1/user/settings", { preHandler: [requireUserAuth] }, async (request, reply) => {
+// 13. User Settings Action (Custom Subdomain, Name, Banner & Direct Links Persisted in DB)
+fastify.post<{ Body: { 
+  serverKey?: string;
+  subdomain?: string;
+  serverName?: string;
+  bannerUrl?: string; 
+  storeUrl?: string; 
+  discordInvite?: string; 
+  links?: { store?: string; discord?: string; website?: string } 
+} }>("/api/v1/user/settings", { preHandler: [requireUserAuth] }, async (request, reply) => {
   const user: User = (request as any).user;
   const body = request.body || {};
+
+  // Custom Subdomain / ServerKey change with collision & reserved keyword validation
+  const requestedSubdomain = body.subdomain || body.serverKey;
+  if (requestedSubdomain !== undefined && requestedSubdomain.trim() !== "") {
+    const cleanSubdomain = requestedSubdomain.trim().toLowerCase();
+    
+    if (cleanSubdomain !== user.serverKey.toLowerCase()) {
+      const validation = validateSubdomainOrKey(cleanSubdomain);
+      if (!validation.valid) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: "Invalid Subdomain",
+          message: validation.error || "Invalid subdomain or server key."
+        });
+      }
+
+      if (isServerKeyClaimed(cleanSubdomain, user.id)) {
+        return reply.status(409).send({
+          statusCode: 409,
+          error: "Conflict",
+          message: `The subdomain or server key '${cleanSubdomain}' is already taken by another account.`
+        });
+      }
+
+      // Migrate existing server in store if present
+      const oldServer = serverStore.get(user.serverKey) || serverStore.get(user.licenseKey);
+      if (oldServer) {
+        serverStore.delete(user.serverKey);
+        oldServer.serverKey = cleanSubdomain;
+        serverStore.set(cleanSubdomain, oldServer);
+      }
+
+      // Update ownership record
+      const tokenHash = hashToken(user.licenseKey);
+      serverOwnerStore.delete(user.serverKey);
+      serverOwnerStore.set(cleanSubdomain, tokenHash);
+
+      user.serverKey = cleanSubdomain;
+    }
+  }
+
+  if (body.serverName !== undefined) {
+    const sanitizedName = sanitizeString(body.serverName, 64);
+    if (sanitizedName) {
+      const srv = serverStore.get(user.serverKey) || serverStore.get(user.licenseKey);
+      if (srv) {
+        srv.name = sanitizedName;
+      }
+    }
+  }
 
   if (body.bannerUrl !== undefined) {
     user.bannerUrl = sanitizeString(body.bannerUrl, 512);
@@ -958,9 +1068,12 @@ fastify.post<{ Body: { bannerUrl?: string; storeUrl?: string; discordInvite?: st
   }
 
   saveDatabaseToDisk();
+  saveServersToDisk();
 
   return {
     success: true,
+    serverKey: user.serverKey,
+    vanityDomain: `${user.serverKey}.${process.env.TUNNEL_PUBLIC_DOMAIN || "realms.sunveil.net"}`,
     bannerUrl: user.bannerUrl,
     storeUrl: user.links.store,
     discordInvite: user.links.discord,

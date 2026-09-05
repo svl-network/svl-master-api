@@ -196,8 +196,10 @@ export class RelayServer {
   private maxPort = Number(process.env.TUNNEL_PORT_MAX) || 25700;
   private connectionCounter = 1;
 
-  // Anti-Botting and Flood Protection
+  // Anti-Botting, Slowloris & Flood Protection
   private ipConnectionHistory = new Map<string, number[]>(); // IP -> timestamps[]
+  private activeIpSockets = new Map<string, Set<net.Socket>>(); // IP -> Set<Socket>
+  private staticResponseCache = new Map<string, { buffer: Buffer; expiresAt: number }>();
 
   constructor() {
     // Periodic cleanup of IP rate limiting history every 2 minutes
@@ -211,6 +213,11 @@ export class RelayServer {
           this.ipConnectionHistory.set(ip, filtered);
         }
       }
+      for (const [host, cached] of this.staticResponseCache.entries()) {
+        if (now > cached.expiresAt) {
+          this.staticResponseCache.delete(host);
+        }
+      }
     }, 2 * 60 * 1000);
 
     // Initialize the Central SNI Router on standard Minecraft port (25565)
@@ -218,13 +225,53 @@ export class RelayServer {
   }
 
   /**
+   * Tracks an active TCP socket under its remote IP for concurrency limits
+   */
+  private registerIpSocket(ip: string, socket: net.Socket): boolean {
+    if (ip === "127.0.0.1" || ip === "localhost") return true;
+
+    let sockets = this.activeIpSockets.get(ip);
+    if (!sockets) {
+      sockets = new Set();
+      this.activeIpSockets.set(ip, sockets);
+    }
+
+    const MAX_CONCURRENT_PER_IP = 6;
+    if (sockets.size >= MAX_CONCURRENT_PER_IP) {
+      return false; // Exceeded concurrent connection limit (anti-bot / anti-exhaustion)
+    }
+
+    sockets.add(socket);
+
+    const cleanup = () => {
+      const set = this.activeIpSockets.get(ip);
+      if (set) {
+        set.delete(socket);
+        if (set.size === 0) {
+          this.activeIpSockets.delete(ip);
+        }
+      }
+    };
+
+    socket.once("close", cleanup);
+    socket.once("error", cleanup);
+    return true;
+  }
+
+  /**
    * Starts the central hostname-based Minecraft TCP Router on port 25565
    */
   private startCentralRouter() {
     this.centralServer = net.createServer((clientSocket) => {
-      const clientIp = clientSocket.remoteAddress || "unknown";
+      const rawIp = clientSocket.remoteAddress || "unknown";
+      const clientIp = rawIp.replace(/^::ffff:/, "");
 
-      if (this.isIpRateLimited(clientIp)) {
+      // 1. TCP Performance tuning
+      clientSocket.setNoDelay(true);
+      clientSocket.setKeepAlive(true, 10000);
+
+      // 2. DDoS & Anti-Bot Protection: Rate Limit & Concurrent Sockets per IP
+      if (this.isIpRateLimited(clientIp) || !this.registerIpSocket(clientIp, clientSocket)) {
         clientSocket.destroy();
         return;
       }
@@ -232,10 +279,18 @@ export class RelayServer {
       let isHandshakeHandled = false;
       let handshakeBuffer = Buffer.alloc(0);
 
+      // 3. Slowloris Protection: abort if no valid Minecraft handshake within 4.5 seconds
+      const handshakeTimeout = setTimeout(() => {
+        if (!isHandshakeHandled) {
+          clientSocket.destroy();
+        }
+      }, 4500);
+
       clientSocket.on("data", (chunk: Buffer) => {
         if (isHandshakeHandled) return;
 
         if (chunk.length > MAX_PACKET_SIZE) {
+          clearTimeout(handshakeTimeout);
           clientSocket.destroy();
           return;
         }
@@ -245,12 +300,14 @@ export class RelayServer {
 
         if (!handshake) {
           if (handshakeBuffer.length > 1024) {
+            clearTimeout(handshakeTimeout);
             clientSocket.destroy();
           }
           return; // Wait for full packet
         }
 
         isHandshakeHandled = true;
+        clearTimeout(handshakeTimeout);
 
         // Resolve target tunnel by requested hostname/subdomain
         const tunnel = this.findTunnelByHost(handshake.hostname);
@@ -258,8 +315,15 @@ export class RelayServer {
         if (!tunnel || !tunnel.ws || tunnel.ws.readyState !== WebSocket.OPEN) {
           // Realm is offline or not found
           if (handshake.nextState === 1) {
-            // Status Ping response
-            clientSocket.write(createStatusResponsePacket(handshake.hostname || "unknown"));
+            // Status Ping response (cached)
+            const hostKey = handshake.hostname || "unknown";
+            const now = Date.now();
+            let cached = this.staticResponseCache.get(hostKey);
+            if (!cached || now > cached.expiresAt) {
+              cached = { buffer: createStatusResponsePacket(hostKey), expiresAt: now + 5000 };
+              this.staticResponseCache.set(hostKey, cached);
+            }
+            clientSocket.write(cached.buffer);
           } else {
             // Login Disconnect response
             clientSocket.write(createDisconnectPacket(`Realm '${handshake.hostname}' is offline or does not exist.`));
@@ -273,6 +337,7 @@ export class RelayServer {
       });
 
       clientSocket.on("error", () => {
+        clearTimeout(handshakeTimeout);
         clientSocket.destroy();
       });
     });
@@ -464,9 +529,15 @@ export class RelayServer {
 
     // Dedicated fallback TCP Server for this specific server
     const tcpServer = net.createServer((clientSocket) => {
-      const clientIp = clientSocket.remoteAddress || "unknown";
+      const rawIp = clientSocket.remoteAddress || "unknown";
+      const clientIp = rawIp.replace(/^::ffff:/, "");
 
-      if (this.isIpRateLimited(clientIp)) {
+      // 1. TCP Performance tuning
+      clientSocket.setNoDelay(true);
+      clientSocket.setKeepAlive(true, 10000);
+
+      // 2. DDoS & Anti-Bot Protection: Rate Limit & Concurrent Sockets per IP
+      if (this.isIpRateLimited(clientIp) || !this.registerIpSocket(clientIp, clientSocket)) {
         clientSocket.destroy();
         return;
       }
@@ -474,10 +545,18 @@ export class RelayServer {
       let isHandshakeVerified = false;
       let handshakeBuffer = Buffer.alloc(0);
 
+      // 3. Slowloris Protection: abort if no valid Minecraft handshake within 4.5 seconds
+      const handshakeTimeout = setTimeout(() => {
+        if (!isHandshakeVerified) {
+          clientSocket.destroy();
+        }
+      }, 4500);
+
       clientSocket.on("data", (chunk: Buffer) => {
         if (isHandshakeVerified) return;
 
         if (chunk.length > MAX_PACKET_SIZE) {
+          clearTimeout(handshakeTimeout);
           clientSocket.destroy();
           return;
         }
@@ -487,16 +566,19 @@ export class RelayServer {
 
         if (!handshake) {
           if (handshakeBuffer.length > 1024) {
+            clearTimeout(handshakeTimeout);
             clientSocket.destroy();
           }
           return;
         }
 
         isHandshakeVerified = true;
+        clearTimeout(handshakeTimeout);
         this.attachClientToTunnel(tunnel, clientSocket, handshakeBuffer);
       });
 
       clientSocket.on("error", () => {
+        clearTimeout(handshakeTimeout);
         clientSocket.destroy();
       });
     });
