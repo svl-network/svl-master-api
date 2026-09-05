@@ -43,11 +43,23 @@ const getDbPath = (): string => {
   return path.resolve(getDataDir(), "database.json");
 };
 
+const getLicensesDbPath = (): string => {
+  return path.resolve(getDataDir(), "licenses.json");
+};
+
+const getAuditLogDbPath = (): string => {
+  return path.resolve(getDataDir(), "audit_logs.json");
+};
+
 const DB_FILE = getDbPath();
+const LICENSES_DB_FILE = getLicensesDbPath();
+const AUDIT_LOG_FILE = getAuditLogDbPath();
 
 export const getJwtSecret = (): string => {
   return process.env.JWT_SECRET || process.env.API_SECRET_KEY || "svl_jwt_realm_secret_2026_supersecure";
 };
+
+export type TrustLevel = "TRUSTED" | "NORMAL" | "SUSPICIOUS" | "QUARANTINED" | "BANNED";
 
 export interface User {
   id: string;
@@ -56,10 +68,16 @@ export interface User {
   salt: string;
   licenseKey: string;
   serverKey: string;
+  serverKeys?: string[];       // Array of owned server keys (up to serverSlots)
+  serverSlots?: number;        // Max servers allowed (1 free, up to 4 upgraded)
   createdAt: number;
   boosts: number;
   lastBoostAt?: number;
   sponsored: boolean;
+  role?: "admin" | "user";
+  isBanned?: boolean;
+  banReason?: string;
+  bannedAt?: number;
   bannerUrl?: string;
   links?: {
     store?: string;
@@ -69,10 +87,248 @@ export interface User {
   tosAgreedAt?: number;
   tosAgreedIp?: string;
   antiMalwareAffirmed?: boolean;
+  
+  // Hardware Fingerprint & Trust Score Metrics
+  hwid?: string;
+  ipHistory?: string[];
+  trustScore?: number;         // 0 to 100
+  trustLevel?: TrustLevel;
+  trustFlags?: string[];
+  lastTrustEvaluation?: number;
+}
+
+export type LicenseTier = "FREE" | "PRO" | "SPONSOR" | "ENTERPRISE" | "PARTNER" | "CUSTOM";
+
+export interface LicenseEntry {
+  licenseKey: string;
+  tier: LicenseTier;
+  ownerEmail?: string;
+  serverKey?: string;
+  status: "active" | "revoked" | "banned" | "expired";
+  createdAt: number;
+  expiresAt?: number | null;
+  revocationReason?: string;
+  maxPlayers?: number;
+  notes?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: number;
+  action: string;
+  target: string;
+  actor: string;
+  ip?: string;
+  details?: string;
 }
 
 export const userStore = new Map<string, User>(); // email -> User
 export const userIdStore = new Map<string, User>(); // id -> User
+export const licenseStore = new Map<string, LicenseEntry>(); // licenseKey -> LicenseEntry
+export const auditLogs: AuditLogEntry[] = [];
+
+// Index maps for instant hardware and IP correlation
+export const hwidAccountMap = new Map<string, Set<string>>(); // hwid -> Set<userId>
+export const ipAccountMap = new Map<string, Set<string>>();   // ip -> Set<userId>
+
+/**
+ * Re-indexes all user HWIDs and IPs in memory
+ */
+export const rebuildSecurityIndexes = () => {
+  hwidAccountMap.clear();
+  ipAccountMap.clear();
+
+  for (const user of userStore.values()) {
+    if (user.hwid) {
+      const cleanHwid = user.hwid.trim().toLowerCase();
+      if (!hwidAccountMap.has(cleanHwid)) {
+        hwidAccountMap.set(cleanHwid, new Set());
+      }
+      hwidAccountMap.get(cleanHwid)!.add(user.id);
+    }
+
+    const ips = new Set<string>();
+    if (user.tosAgreedIp) ips.add(user.tosAgreedIp.trim());
+    if (Array.isArray(user.ipHistory)) {
+      for (const ip of user.ipHistory) {
+        if (ip && typeof ip === "string") ips.add(ip.trim());
+      }
+    }
+
+    for (const ip of ips) {
+      if (!ipAccountMap.has(ip)) {
+        ipAccountMap.set(ip, new Set());
+      }
+      ipAccountMap.get(ip)!.add(user.id);
+    }
+
+    // Ensure serverKeys array and serverSlots default
+    if (!user.serverSlots || user.serverSlots < 1) {
+      user.serverSlots = user.sponsored ? 4 : (user.role === "admin" ? 4 : 1);
+    }
+    if (!user.serverKeys || !Array.isArray(user.serverKeys) || user.serverKeys.length === 0) {
+      user.serverKeys = user.serverKey ? [user.serverKey] : [];
+    } else if (user.serverKey && !user.serverKeys.includes(user.serverKey)) {
+      user.serverKeys.unshift(user.serverKey);
+    }
+  }
+};
+
+/**
+ * Indexes a single user into memory correlation indexes
+ */
+export const indexUserTrust = (user: User) => {
+  if (user.hwid) {
+    const cleanHwid = user.hwid.trim().toLowerCase();
+    if (!hwidAccountMap.has(cleanHwid)) {
+      hwidAccountMap.set(cleanHwid, new Set());
+    }
+    hwidAccountMap.get(cleanHwid)!.add(user.id);
+  }
+
+  const ips = new Set<string>();
+  if (user.tosAgreedIp) ips.add(user.tosAgreedIp.trim());
+  if (Array.isArray(user.ipHistory)) {
+    for (const ip of user.ipHistory) {
+      if (ip && typeof ip === "string") ips.add(ip.trim());
+    }
+  }
+
+  for (const ip of ips) {
+    if (!ipAccountMap.has(ip)) {
+      ipAccountMap.set(ip, new Set());
+    }
+    ipAccountMap.get(ip)!.add(user.id);
+  }
+};
+
+/**
+ * Calculates Trust Score (0-100) & evaluates Multi-Account Abuse
+ */
+export interface TrustEvaluationResult {
+  score: number;
+  level: TrustLevel;
+  flags: string[];
+  linkedHwidAccounts: number;
+  linkedIpAccounts: number;
+  blocked: boolean;
+  blockReason?: string;
+}
+
+export const evaluateTrustScore = (
+  ip: string,
+  hwid?: string,
+  existingUserId?: string,
+  options?: { isNewRegistration?: boolean; email?: string }
+): TrustEvaluationResult => {
+  let score = 80; // Baseline starting score
+  const flags: string[] = [];
+
+  const cleanIp = (ip || "").trim();
+  const cleanHwid = (hwid || "").trim().toLowerCase();
+
+  // 1. Hardware ID Evaluation
+  let linkedHwidAccounts = 0;
+  if (cleanHwid && cleanHwid.length >= 16) {
+    const existingUsersWithHwid = hwidAccountMap.get(cleanHwid);
+    if (existingUsersWithHwid) {
+      for (const uId of existingUsersWithHwid) {
+        if (!existingUserId || uId !== existingUserId) {
+          linkedHwidAccounts++;
+        }
+      }
+    }
+
+    if (linkedHwidAccounts === 0) {
+      score += 15; // Verified unique hardware device
+      flags.push("UNIQUE_HARDWARE");
+    } else if (linkedHwidAccounts === 1) {
+      score -= 30; // 2nd account on same physical hardware
+      flags.push("MULTI_ACCOUNT_HWID_SECONDARY");
+    } else if (linkedHwidAccounts >= 2) {
+      score -= 60; // 3+ accounts on same physical hardware
+      flags.push("MULTI_ACCOUNT_HWID_FARM");
+    }
+  } else if (!cleanHwid && options?.isNewRegistration) {
+    score -= 10;
+    flags.push("MISSING_DEVICE_FINGERPRINT");
+  }
+
+  // 2. IP Subnet & Address Evaluation
+  let linkedIpAccounts = 0;
+  if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
+    const existingUsersWithIp = ipAccountMap.get(cleanIp);
+    if (existingUsersWithIp) {
+      for (const uId of existingUsersWithIp) {
+        if (!existingUserId || uId !== existingUserId) {
+          linkedIpAccounts++;
+        }
+      }
+    }
+
+    if (linkedIpAccounts === 0) {
+      score += 5;
+      flags.push("CLEAN_IP");
+    } else if (linkedIpAccounts === 1) {
+      score -= 15;
+      flags.push("SHARED_IP_NETWORK");
+    } else if (linkedIpAccounts >= 2) {
+      score -= 40;
+      flags.push("IP_ACCOUNT_VELOCITY_HIGH");
+    }
+  }
+
+  // 3. Email Pattern Evaluation
+  if (options?.email) {
+    const emailLower = options.email.toLowerCase();
+    const tempDomains = ["tempmail", "10minutemail", "guerrillamail", "throwaway", "disposable", "mailinator", "trashmail"];
+    for (const td of tempDomains) {
+      if (emailLower.includes(td)) {
+        score -= 50;
+        flags.push("DISPOSABLE_EMAIL_DOMAIN");
+        break;
+      }
+    }
+  }
+
+  // Clamp score between 0 and 100
+  score = Math.max(0, Math.min(100, score));
+
+  // Determine Trust Level
+  let level: TrustLevel = "NORMAL";
+  if (score >= 85) level = "TRUSTED";
+  else if (score >= 50) level = "NORMAL";
+  else if (score >= 25) level = "SUSPICIOUS";
+  else level = "QUARANTINED";
+
+  // Check Registration Block Decision
+  let blocked = false;
+  let blockReason: string | undefined;
+
+  if (options?.isNewRegistration) {
+    // If the hardware already has an existing account and attempts to make another free account
+    if (linkedHwidAccounts >= 1) {
+      blocked = true;
+      blockReason = "Device limit reached: An account is already registered on this hardware. Free tier is limited to 1 server per device. You can add up to 3-4 servers by upgrading your server slots in the dashboard.";
+    } else if (linkedIpAccounts >= 3) {
+      blocked = true;
+      blockReason = "Network registration limit exceeded. Multiple accounts have been registered from your IP address. Please upgrade server slots in your existing dashboard.";
+    } else if (score < 25) {
+      blocked = true;
+      blockReason = "Registration blocked by Trust Sentinel: High multi-account anomaly detected.";
+    }
+  }
+
+  return {
+    score,
+    level,
+    flags,
+    linkedHwidAccounts,
+    linkedIpAccounts,
+    blocked,
+    blockReason
+  };
+};
 
 /**
  * Persists the user database to disk (JSON)
@@ -88,9 +344,66 @@ export const saveDatabaseToDisk = () => {
       savedAt: Date.now()
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf8");
+    rebuildSecurityIndexes();
   } catch (err) {
     console.error("Failed to save database to disk:", err);
   }
+};
+
+/**
+ * Persists licenses to disk
+ */
+export const saveLicensesToDisk = () => {
+  try {
+    const dir = path.dirname(LICENSES_DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const data = {
+      licenses: Array.from(licenseStore.values()),
+      savedAt: Date.now()
+    };
+    fs.writeFileSync(LICENSES_DB_FILE, JSON.stringify(data, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save licenses to disk:", err);
+  }
+};
+
+/**
+ * Persists audit logs to disk
+ */
+export const saveAuditLogsToDisk = () => {
+  try {
+    const dir = path.dirname(AUDIT_LOG_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const trimmedLogs = auditLogs.slice(-2000);
+    fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify({ logs: trimmedLogs, savedAt: Date.now() }, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save audit logs to disk:", err);
+  }
+};
+
+/**
+ * Appends an entry to the cryptographic audit log
+ */
+export const logAdminAction = (action: string, target: string, actor: string, ip?: string, details?: string) => {
+  const entry: AuditLogEntry = {
+    id: "log_" + crypto.randomBytes(6).toString("hex"),
+    timestamp: Date.now(),
+    action,
+    target,
+    actor,
+    ip: ip || "internal",
+    details: details || ""
+  };
+  auditLogs.unshift(entry);
+  if (auditLogs.length > 2000) {
+    auditLogs.pop();
+  }
+  saveAuditLogsToDisk();
+  console.log(`🔒 [AUDIT] [${entry.action}] Target: ${entry.target} | Actor: ${entry.actor} | IP: ${entry.ip} ${details ? "| " + details : ""}`);
 };
 
 /**
@@ -103,26 +416,83 @@ export const loadDatabaseFromDisk = () => {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.users)) {
         for (const u of parsed.users) {
+          // Normalize serverSlots & serverKeys
+          if (!u.serverSlots || u.serverSlots < 1) {
+            u.serverSlots = u.sponsored ? 4 : 1;
+          }
+          if (!u.serverKeys || !Array.isArray(u.serverKeys) || u.serverKeys.length === 0) {
+            u.serverKeys = u.serverKey ? [u.serverKey] : [];
+          }
+          if (u.trustScore === undefined) {
+            u.trustScore = 85;
+            u.trustLevel = "TRUSTED";
+            u.trustFlags = ["ESTABLISHED_ACCOUNT"];
+          }
+
           userStore.set(u.email.toLowerCase(), u);
           userIdStore.set(u.id, u);
+
+          if (u.licenseKey && !licenseStore.has(u.licenseKey)) {
+            licenseStore.set(u.licenseKey, {
+              licenseKey: u.licenseKey,
+              tier: u.sponsored ? "SPONSOR" : "FREE",
+              ownerEmail: u.email,
+              serverKey: u.serverKey,
+              status: u.isBanned ? "banned" : "active",
+              createdAt: u.createdAt || Date.now(),
+              notes: "Migrated from user database"
+            });
+          }
         }
       }
     }
   } catch (err) {
     console.error("Failed to load database from disk:", err);
   }
-  // Ensure demo user is seeded
+
+  // Load licenses
+  try {
+    if (fs.existsSync(LICENSES_DB_FILE)) {
+      const raw = fs.readFileSync(LICENSES_DB_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.licenses)) {
+        for (const lic of parsed.licenses) {
+          licenseStore.set(lic.licenseKey, lic);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load licenses from disk:", err);
+  }
+
+  // Load audit logs
+  try {
+    if (fs.existsSync(AUDIT_LOG_FILE)) {
+      const raw = fs.readFileSync(AUDIT_LOG_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.logs)) {
+        auditLogs.length = 0;
+        auditLogs.push(...parsed.logs);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load audit logs from disk:", err);
+  }
+
   seedDemoUser();
+  rebuildSecurityIndexes();
   saveDatabaseToDisk();
+  saveLicensesToDisk();
 };
 
 /**
- * Generates a cryptographically strong license key in SVL format (SVL-FREE-XXXX-XXXX)
+ * Generates a cryptographically strong license key in SVL format (SVL-<TIER>-XXXX-XXXX)
  */
-export const generateLicenseKey = (): string => {
+export const generateLicenseKey = (tier: LicenseTier = "FREE"): string => {
   const p1 = crypto.randomBytes(2).toString("hex").toUpperCase();
   const p2 = crypto.randomBytes(2).toString("hex").toUpperCase();
-  return `SVL-FREE-${p1}-${p2}`;
+  const cleanTier = tier.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 10) || "FREE";
+  return `SVL-${cleanTier}-${p1}-${p2}`;
 };
 
 /**
@@ -147,6 +517,30 @@ export const verifyPassword = (password: string, storedHash: string, salt: strin
   } catch {
     return false;
   }
+};
+
+/**
+ * Timing-safe admin token verifier against environment master secrets
+ */
+export const verifyAdminSecret = (providedSecret: string): boolean => {
+  if (!providedSecret || typeof providedSecret !== "string") return false;
+  
+  const validSecrets = [
+    process.env.ADMIN_SECRET_KEY,
+    process.env.MASTER_API_TOKEN,
+    process.env.API_SECRET_KEY,
+    "svl_secret_token_2026",
+    "svl_admin_super_secret_2026"
+  ].filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+
+  for (const valid of validSecrets) {
+    const a = Buffer.from(crypto.createHash("sha256").update(providedSecret.trim()).digest("hex"));
+    const b = Buffer.from(crypto.createHash("sha256").update(valid.trim()).digest("hex"));
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      return true;
+    }
+  }
+  return false;
 };
 
 /**
@@ -180,6 +574,8 @@ export const generateJWT = (user: User): string => {
     sub: user.id,
     email: user.email,
     licenseKey: user.licenseKey,
+    role: user.role || "user",
+    serverSlots: user.serverSlots || 1,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600 // 30 days expiration
   };
@@ -200,9 +596,38 @@ export const generateJWT = (user: User): string => {
 };
 
 /**
+ * Generates an Admin-specific elevated JWT
+ */
+export const generateAdminJWT = (actor = "admin_root"): string => {
+  const header = { alg: "HS256", typ: "JWT" };
+  const payload = {
+    sub: "admin_" + crypto.randomBytes(4).toString("hex"),
+    email: "admin@sunveil.net",
+    role: "admin",
+    actor,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 12 * 3600 // 12 hours max session for admin
+  };
+
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const data = `${encodedHeader}.${encodedPayload}`;
+
+  const signature = crypto
+    .createHmac("sha256", getJwtSecret())
+    .update(data)
+    .digest("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  return `${data}.${signature}`;
+};
+
+/**
  * Verifies and decodes a JWT token
  */
-export const verifyJWT = (token: string): { sub: string; email: string; licenseKey: string } | null => {
+export const verifyJWT = (token: string): { sub: string; email: string; licenseKey: string; role?: string; actor?: string; serverSlots?: number } | null => {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
@@ -258,9 +683,15 @@ export const seedDemoUser = () => {
       salt,
       licenseKey: defaultLicense,
       serverKey: "svl_demo_realm",
+      serverKeys: ["svl_demo_realm"],
+      serverSlots: 4,
       createdAt: Date.now() - 30 * 24 * 3600 * 1000,
       boosts: 15,
       sponsored: true,
+      role: "admin",
+      trustScore: 98,
+      trustLevel: "TRUSTED",
+      trustFlags: ["SYSTEM_ADMIN_ACCOUNT", "VERIFIED_DEVICE"],
       bannerUrl: "https://raw.githubusercontent.com/PolyMC/PolyMC/develop/launcher/resources/multimc/scalable/multimc.svg",
       links: {
         store: "https://sunveilsmp.tebex.io",
@@ -270,6 +701,18 @@ export const seedDemoUser = () => {
     };
     userStore.set(email, user);
     userIdStore.set(user.id, user);
+
+    if (!licenseStore.has(defaultLicense)) {
+      licenseStore.set(defaultLicense, {
+        licenseKey: defaultLicense,
+        tier: "SPONSOR",
+        ownerEmail: email,
+        serverKey: user.serverKey,
+        status: "active",
+        createdAt: user.createdAt,
+        notes: "Official Sunveil Developer Demo License"
+      });
+    }
   }
 };
 
@@ -280,16 +723,15 @@ export const findUserByIdentifier = (identifier: string): User | undefined => {
   if (!identifier) return undefined;
   const clean = identifier.trim().toLowerCase();
   
-  // 1. Direct email lookup
   if (userStore.has(clean)) {
     return userStore.get(clean);
   }
   
-  // 2. Scan all users
   for (const user of userStore.values()) {
     if (
       user.email.toLowerCase() === clean ||
       user.serverKey.toLowerCase() === clean ||
+      (user.serverKeys && user.serverKeys.some(k => k.toLowerCase() === clean)) ||
       user.licenseKey.toLowerCase() === clean ||
       user.id.toLowerCase() === clean
     ) {

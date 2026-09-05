@@ -16,6 +16,31 @@ let currentUserData = null;
 let currentKeyVisible = false;
 let isSyncing = false;
 
+// Helper: Hardware & Browser Fingerprinting for Anti-Alt Trust Sentinel
+function getDeviceFingerprint() {
+  try {
+    const nav = window.navigator || {};
+    const scr = window.screen || {};
+    const components = [
+      nav.userAgent || "",
+      nav.language || "",
+      scr.width || 0,
+      scr.height || 0,
+      scr.colorDepth || 0,
+      new Date().getTimezoneOffset()
+    ];
+    const str = components.join("|");
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return "hwid_" + Math.abs(hash).toString(16) + "_" + (scr.width || 0) + "x" + (scr.height || 0);
+  } catch {
+    return "hwid_generic_client";
+  }
+}
+
 // Helper: Retrieve JWT Token from localStorage
 function getAuthToken() {
   return localStorage.getItem(STORAGE_TOKEN_KEY) || localStorage.getItem("svl_realms_session_jwt");
@@ -78,6 +103,11 @@ document.addEventListener("DOMContentLoaded", () => {
     closeDashBtn.addEventListener("click", closeDashboardModal);
   }
 
+  const closeAddSlotBtn = document.getElementById("btn-close-add-slot-modal");
+  if (closeAddSlotBtn) {
+    closeAddSlotBtn.addEventListener("click", closeAddSlotModal);
+  }
+
   // Modal Backdrop Click Dismissal
   const authModal = document.getElementById("auth-modal");
   if (authModal) {
@@ -93,6 +123,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  const addSlotModal = document.getElementById("modal-add-server-slot");
+  if (addSlotModal) {
+    addSlotModal.addEventListener("click", (e) => {
+      if (e.target === addSlotModal) closeAddSlotModal();
+    });
+  }
+
+  // Add Server Slot Modal Triggers
+  const openAddSlotBtn = document.getElementById("btn-add-server-slot");
+  if (openAddSlotBtn) {
+    openAddSlotBtn.addEventListener("click", openAddSlotModal);
+  }
+
+  const formAddSlot = document.getElementById("form-add-server-slot");
+  if (formAddSlot) {
+    formAddSlot.addEventListener("submit", handleCreateServerSlot);
+  }
+
   // Auth Tabs
   const tabLogin = document.getElementById("tab-login");
   if (tabLogin) {
@@ -103,7 +151,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (tabRegister) {
     tabRegister.addEventListener("click", () => switchAuthTab("register"));
   }
-
 
   // Forms
   const authForm = document.getElementById("auth-form");
@@ -154,7 +201,11 @@ async function checkSessionState() {
   if (token) {
     try {
       const res = await fetch("/api/v1/user/dashboard", {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-client-device-fingerprint": getDeviceFingerprint(),
+          "x-svl-hwid": getDeviceFingerprint()
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -204,6 +255,27 @@ function openDashboardModal() {
 
 function closeDashboardModal() {
   const modal = document.getElementById("dashboard-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openAddSlotModal() {
+  const modal = document.getElementById("modal-add-server-slot");
+  if (modal) {
+    const alertBox = document.getElementById("add-slot-alert");
+    if (alertBox) {
+      alertBox.classList.add("hidden");
+      alertBox.innerText = "";
+    }
+    const nameInput = document.getElementById("input-new-server-name");
+    const keyInput = document.getElementById("input-new-server-key");
+    if (nameInput) nameInput.value = "";
+    if (keyInput) keyInput.value = "";
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeAddSlotModal() {
+  const modal = document.getElementById("modal-add-server-slot");
   if (modal) modal.classList.add("hidden");
 }
 
@@ -321,7 +393,11 @@ async function handleAuthSubmit(event) {
   try {
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-client-device-fingerprint": getDeviceFingerprint(),
+        "x-svl-hwid": getDeviceFingerprint()
+      },
       body: JSON.stringify(reqBody)
     });
 
@@ -340,16 +416,6 @@ async function handleAuthSubmit(event) {
   } catch (err) {
     if (alertBox) {
       alertBox.innerText = err.message || "An unexpected error occurred.";
-      alertBox.className = "alert-box alert-error";
-      alertBox.classList.remove("hidden");
-    }
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.style.opacity = "1";
-    }
-  }
-}
       alertBox.className = "alert-box alert-error";
       alertBox.classList.remove("hidden");
     }
@@ -382,7 +448,11 @@ async function fetchDashboardData(manual = false) {
 
   try {
     const res = await fetch("/api/v1/user/dashboard", {
-      headers: { "Authorization": `Bearer ${token}` }
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "x-client-device-fingerprint": getDeviceFingerprint(),
+        "x-svl-hwid": getDeviceFingerprint()
+      }
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -419,13 +489,80 @@ async function fetchDashboardData(manual = false) {
 
 // Render Dashboard UI with Real Database Data
 function renderDashboard(data) {
-  const { user, server } = data;
+  const { user, server, servers } = data;
 
   const emailDisplay = document.getElementById("dash-email-display");
   if (emailDisplay) emailDisplay.innerText = user.email;
 
   const accountEmailLabel = document.getElementById("account-email-label");
   if (accountEmailLabel) accountEmailLabel.innerText = user.email;
+
+  // Multi-Server Slot Capacity & Tabs
+  const usedSlots = user.usedSlots || (servers ? servers.length : 1);
+  const maxUserSlots = user.serverSlots || 1;
+
+  const slotCapacityBadge = document.getElementById("slot-capacity-badge");
+  if (slotCapacityBadge) {
+    slotCapacityBadge.innerText = `Slots: ${usedSlots} / ${maxUserSlots}`;
+  }
+
+  const accountSlotsLabel = document.getElementById("account-slots-label");
+  if (accountSlotsLabel) {
+    accountSlotsLabel.innerText = `${usedSlots} of ${maxUserSlots} Server Slots Active (Max 4)`;
+  }
+
+  // Account Trust Score & Anti-Alt Sentinel Display
+  const trustBadge = document.getElementById("account-trust-badge");
+  const trustScore = user.trustScore !== undefined ? user.trustScore : 95;
+  const trustLevel = user.trustLevel || (trustScore >= 80 ? "TRUSTED" : (trustScore >= 50 ? "NORMAL" : "SUSPICIOUS"));
+
+  if (trustBadge) {
+    trustBadge.innerText = `🛡️ Trust: ${trustScore}/100 (${trustLevel})`;
+    if (trustLevel === "TRUSTED" || trustScore >= 80) {
+      trustBadge.style.background = "rgba(16, 185, 129, 0.15)";
+      trustBadge.style.color = "#34d399";
+    } else if (trustLevel === "NORMAL" || trustScore >= 50) {
+      trustBadge.style.background = "rgba(245, 158, 11, 0.15)";
+      trustBadge.style.color = "#fbbf24";
+    } else {
+      trustBadge.style.background = "rgba(239, 68, 68, 0.15)";
+      trustBadge.style.color = "#f87171";
+    }
+  }
+
+  const hwidStatusEl = document.getElementById("account-hwid-status");
+  if (hwidStatusEl) {
+    const shortHwid = getDeviceFingerprint().substring(0, 18);
+    hwidStatusEl.innerText = `Verified Hardware Fingerprint Linked (${shortHwid}...)`;
+  }
+
+  // Render Server Slots Tabs
+  const slotsTabsContainer = document.getElementById("server-slots-tabs");
+  if (slotsTabsContainer) {
+    slotsTabsContainer.innerHTML = "";
+    const serverList = servers && servers.length > 0 ? servers : (server ? [server] : []);
+
+    serverList.forEach((srv, index) => {
+      const isActive = server && srv.serverKey === server.serverKey;
+      const tabBtn = document.createElement("button");
+      tabBtn.className = `btn btn-sm ${isActive ? "btn-primary active" : "btn-secondary"}`;
+      tabBtn.style.fontWeight = "600";
+      tabBtn.innerText = `${srv.name || `Server ${index + 1}`} ${isActive ? "(Active)" : ""}`;
+      tabBtn.addEventListener("click", () => {
+        if (!isActive) selectServerSlot(srv.serverKey);
+      });
+      slotsTabsContainer.appendChild(tabBtn);
+    });
+
+    if (usedSlots < maxUserSlots && usedSlots < 4) {
+      const addTabBtn = document.createElement("button");
+      addTabBtn.className = "btn btn-secondary btn-sm";
+      addTabBtn.style.borderStyle = "dashed";
+      addTabBtn.innerText = "➕ New Slot";
+      addTabBtn.addEventListener("click", openAddSlotModal);
+      slotsTabsContainer.appendChild(addTabBtn);
+    }
+  }
 
   // License Key (Real database key)
   const keyEl = document.getElementById("license-key-value");
@@ -473,6 +610,85 @@ function renderDashboard(data) {
       verifiedBadge.innerText = server.online ? "Verified bridge" : "Bridge offline";
       verifiedBadge.className = server.online ? "badge-subtle accent-text" : "badge-subtle";
     }
+
+    // Performance Metrics Rendering
+    const perf = server.performance || { cpuPercent: 12, ramUsedMB: 2048, ramMaxMB: 8192, tps: 20.0, uptimeSeconds: 3600 };
+    const tpsPill = document.getElementById("perf-tps-pill");
+    const tpsVal = document.getElementById("perf-tps-val");
+    const ramPct = document.getElementById("perf-ram-pct");
+    const ramVal = document.getElementById("perf-ram-val");
+    const ramBar = document.getElementById("perf-ram-bar");
+    const cpuPct = document.getElementById("perf-cpu-pct");
+    const cpuVal = document.getElementById("perf-cpu-val");
+    const cpuBar = document.getElementById("perf-cpu-bar");
+    const uptimeVal = document.getElementById("perf-uptime-val");
+
+    if (server.online) {
+      const tpsNum = Number(perf.tps || 20.0);
+      if (tpsPill) {
+        tpsPill.innerText = `${tpsNum.toFixed(1)} TPS`;
+        tpsPill.className = tpsNum >= 19.0 ? "status-badge status-online" : (tpsNum >= 15.0 ? "status-badge" : "status-badge status-offline");
+      }
+      if (tpsVal) tpsVal.innerHTML = `${tpsNum.toFixed(1)} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 20</span>`;
+
+      const ramUsedGB = (Number(perf.ramUsedMB || 2048) / 1024).toFixed(1);
+      const ramMaxGB = (Number(perf.ramMaxMB || 8192) / 1024).toFixed(1);
+      const calculatedRamPct = Math.min(100, Math.round((Number(perf.ramUsedMB || 2048) / Number(perf.ramMaxMB || 8192)) * 100));
+      if (ramPct) ramPct.innerText = `${calculatedRamPct}%`;
+      if (ramVal) ramVal.innerHTML = `${ramUsedGB} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ ${ramMaxGB} GB</span>`;
+      if (ramBar) ramBar.style.width = `${calculatedRamPct}%`;
+
+      const cpuNum = Number(perf.cpuPercent || 10).toFixed(1);
+      if (cpuPct) cpuPct.innerText = `${cpuNum}%`;
+      if (cpuVal) cpuVal.innerText = `${cpuNum}%`;
+      if (cpuBar) cpuBar.style.width = `${Math.min(100, cpuNum)}%`;
+
+      if (uptimeVal) {
+        const upSec = Number(perf.uptimeSeconds || 3600);
+        const hrs = Math.floor(upSec / 3600);
+        const mins = Math.floor((upSec % 3600) / 60);
+        uptimeVal.innerText = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      }
+    } else {
+      if (tpsPill) { tpsPill.innerText = "0.0 TPS"; tpsPill.className = "status-badge status-offline"; }
+      if (tpsVal) tpsVal.innerHTML = `0.0 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 20</span>`;
+      if (ramPct) ramPct.innerText = "0%";
+      if (ramVal) ramVal.innerHTML = `0.0 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 0.0 GB</span>`;
+      if (ramBar) ramBar.style.width = "0%";
+      if (cpuPct) cpuPct.innerText = "0%";
+      if (cpuVal) cpuVal.innerText = "0.0%";
+      if (cpuBar) cpuBar.style.width = "0%";
+      if (uptimeVal) uptimeVal.innerText = "Offline";
+    }
+
+    // Live Connected Player List Rendering
+    const playerBadge = document.getElementById("stat-player-count-badge");
+    const playerListContainer = document.getElementById("player-list-container");
+    const pList = server.playerList || [];
+
+    if (playerBadge) {
+      playerBadge.innerText = `${server.online ? (server.players || pList.length) : 0} Players Online`;
+    }
+
+    if (playerListContainer) {
+      if (server.online && pList.length > 0) {
+        playerListContainer.innerHTML = pList.map(p => {
+          const pName = typeof p === "string" ? p : p.name;
+          const ping = typeof p === "object" && p.ping !== undefined ? `${p.ping}ms` : "Good";
+          return `
+            <div class="player-chip" style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #f4f4f5;">
+              <img src="https://mc-heads.net/avatar/${encodeURIComponent(pName)}/20" alt="${pName}" style="width: 18px; height: 18px; border-radius: 4px;" onerror="this.style.display='none'">
+              <span>${pName}</span>
+              <span style="font-size: 10px; color: #10b981; background: rgba(16,185,129,0.15); padding: 2px 6px; border-radius: 10px; font-family: monospace;">${ping}</span>
+            </div>
+          `;
+        }).join("");
+      } else if (server.online) {
+        playerListContainer.innerHTML = `<span style="font-size: 13px; color: var(--text-muted, #71717a); font-style: italic;">No players connected right now. Share your server IP to invite players!</span>`;
+      } else {
+        playerListContainer.innerHTML = `<span style="font-size: 13px; color: var(--text-muted, #71717a); font-style: italic;">Server is offline. Start your server with SVLBridge installed.</span>`;
+      }
+    }
   } else {
     // Unregistered / Pending state (No connected server yet)
     if (statusPill) {
@@ -488,6 +704,10 @@ function renderDashboard(data) {
     if (verifiedBadge) {
       verifiedBadge.innerText = "Unlinked";
       verifiedBadge.className = "badge-subtle";
+    }
+    const playerListContainer = document.getElementById("player-list-container");
+    if (playerListContainer) {
+      playerListContainer.innerHTML = `<span style="font-size: 13px; color: var(--text-muted, #71717a); font-style: italic;">Configure your server's config.yml with your license key to see live player list and performance.</span>`;
     }
   }
 
@@ -534,6 +754,89 @@ function renderDashboard(data) {
   if (bannerInput && !bannerInput.value && user.bannerUrl) bannerInput.value = user.bannerUrl;
   if (storeInput && !storeInput.value && (user.storeUrl || user.links?.store)) storeInput.value = user.storeUrl || user.links.store;
   if (discordInput && !discordInput.value && (user.discordInvite || user.links?.discord)) discordInput.value = user.discordInvite || user.links.discord;
+}
+
+// Switch Active Server Slot via Live API
+async function selectServerSlot(serverKey) {
+  const token = getAuthToken();
+  if (!token) return;
+
+  try {
+    const res = await fetch("/api/v1/user/servers/select", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ serverKey })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "Failed to switch server slot.");
+    }
+
+    showToast(`Switched to active server '${serverKey}'.`);
+    fetchDashboardData(false);
+  } catch (err) {
+    showToast(err.message || "Error switching server slot.");
+  }
+}
+
+// Handle Additional Server Slot Creation Form Submit
+async function handleCreateServerSlot(event) {
+  event.preventDefault();
+  const token = getAuthToken();
+  if (!token) {
+    openAuthModal("login");
+    return;
+  }
+
+  const alertBox = document.getElementById("add-slot-alert");
+  const submitBtn = document.getElementById("btn-submit-add-slot");
+  const nameInput = document.getElementById("input-new-server-name");
+  const keyInput = document.getElementById("input-new-server-key");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  const serverKey = keyInput ? keyInput.value.trim() : "";
+
+  if (alertBox) alertBox.classList.add("hidden");
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Deploying Slot...";
+  }
+
+  try {
+    const res = await fetch("/api/v1/user/servers/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ name, serverKey })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "Failed to deploy new server instance.");
+    }
+
+    closeAddSlotModal();
+    showToast(`🎉 New server instance '${data.server?.name || name}' created!`);
+    fetchDashboardData(false);
+  } catch (err) {
+    if (alertBox) {
+      alertBox.innerText = err.message || "Could not create server slot.";
+      alertBox.className = "alert-box alert-error";
+      alertBox.classList.remove("hidden");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "Deploy Server Instance";
+    }
+  }
 }
 
 // Toggle License Key Masking

@@ -530,7 +530,7 @@
 
       <div class="footer-bottom">
         <span>Sunveil Connect — Independent Minecraft Software</span>
-        <span>Storage: Technically necessary local session storage only (No advertising cookies)</span>
+        <span><a href="/admin.html" style="color: inherit; text-decoration: none; opacity: 0.5;">🔒 Staff Portal</a> | Storage: Technically necessary local session storage only (No advertising cookies)</span>
       </div>
     </div>
   </footer>
@@ -588,18 +588,18 @@
 
             <!-- Scrollable Terms of Service Container -->
             <label class="form-label" style="font-size: 12px;">Terms of Service &amp; Acceptable Use</label>
-            <div style="max-height: 110px; overflow-y: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 6px; padding: 10px; font-size: 11px; line-height: 1.45; color: var(--text-muted, #71717a); margin-bottom: 12px;">
-              <strong>1. Prohibited Content:</strong> Hosting, distributing, or transmitting viruses, trojans, ransomware, denial-of-service tools, or compromised Minecraft mods/plugins is strictly forbidden.<br><br>
-              <strong>2. Player Safety:</strong> You must not attempt to compromise the security, integrity, or hardware of any client connecting to your realm.<br><br>
-              <strong>3. Zero-Tolerance Enforcement:</strong> Violations will result in immediate permanent key revocation, hardware fingerprint blacklisting, and reporting to relevant cyber authorities.<br><br>
-              <strong>4. Privacy &amp; Data:</strong> Encrypted tunnels are provided for genuine Minecraft gameplay and modded server networking only.
+            <div style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 6px; padding: 10px; font-size: 11px; line-height: 1.45; color: var(--text-muted, #71717a); margin-bottom: 12px;">
+              <strong>1. Administrative Ban &amp; Removal Authority:</strong> Administrators and Sunveil Network staff reserve full authority to immediately suspend, ban, or delete any server or account violating policies <strong>without refund</strong>.<br><br>
+              <strong>2. Strict No-Refund Policy (§ 356 Abs. 5 BGB):</strong> Digital services, server boosts, and licenses are delivered immediately upon transaction. You explicitly consent to immediate service execution and waive the statutory right of withdrawal.<br><br>
+              <strong>3. Zero-Tolerance for Malware:</strong> Hosting, distributing, or transmitting viruses, trojans, ransomware, or malicious Minecraft mods/plugins is strictly forbidden.<br><br>
+              <strong>4. Player Protection:</strong> You must not attempt to compromise the security, integrity, or hardware of any client connecting to your realm.
             </div>
 
             <!-- TOS Checkbox -->
             <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px;">
               <input type="checkbox" id="input-tos-agree" style="margin-top: 3px; cursor: pointer;">
               <label for="input-tos-agree" style="font-size: 12px; cursor: pointer; color: var(--text-primary, #f4f4f5); line-height: 1.35;">
-                I agree to the <strong>Terms of Service</strong> and pledge to maintain safe infrastructure.
+                I agree to the <strong>Terms of Service</strong>, the <strong>No-Refund Policy (§ 356 Abs. 5 BGB)</strong>, and pledge to maintain safe infrastructure.
               </label>
             </div>
 
@@ -628,23 +628,23 @@
   </div>
 
   <!-- =========================================================================
-       MODAL 2: SERVER OWNER DASHBOARD
+       MODAL 2: SERVER OWNER DASHBOARD (REAL-TIME MANAGEMENT & TELEMETRY)
        ========================================================================= -->
   <div id="dashboard-modal" class="modal-backdrop hidden">
     <div class="modal-card modal-card-wide">
       <div class="modal-header">
         <div class="header-user-meta">
-          <h3 class="modal-title">Server Dashboard</h3>
+          <h3 class="modal-title">Server Management Dashboard</h3>
           <span id="dash-email-display" class="user-meta-email">owner@sunveil.net</span>
         </div>
         <div class="modal-header-actions">
-          <button id="btn-sync-dash" class="btn btn-secondary btn-sm">
+          <button id="btn-sync-dash" class="btn btn-secondary btn-sm" title="Live refresh server state">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"></polyline>
               <polyline points="1 20 1 14 7 14"></polyline>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
-            Sync
+            Sync Live
           </button>
           <button id="btn-close-dashboard" class="modal-close" aria-label="Close dashboard">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -656,6 +656,72 @@
       </div>
 
       <div class="modal-body dash-body">
+        <!-- Multi-Server Slot Selector & Capacity Management -->
+        <div class="server-slots-bar" style="background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+              <span style="font-size: 13px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">🖥️ Server Instances</span>
+              <span id="slot-capacity-badge" class="badge-subtle" style="background: rgba(99, 102, 241, 0.2); color: #818cf8; font-weight: 800; font-family: 'JetBrains Mono', monospace;">Slots: 1 / 1</span>
+            </div>
+            <div id="server-slots-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+              <!-- Populated dynamically via app.js -->
+              <button class="btn btn-primary btn-sm slot-tab active">Server 1 (Active)</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="btn-add-server-slot" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 6px;">
+              <span>➕ Add Server</span>
+            </button>
+            <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #fff; font-weight: 700; border: none; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+              <span>⭐ Upgrade to 4 Slots ↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Live Real-time Performance Metrics Bar -->
+        <div class="perf-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
+          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">⚡ Tick Rate (TPS)</span>
+              <span id="perf-tps-pill" class="status-badge status-online" style="font-size: 11px;">20.0 TPS</span>
+            </div>
+            <div id="perf-tps-val" style="font-size: 20px; font-weight: 800; color: #10b981; font-family: 'JetBrains Mono', monospace;">20.0 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 20</span></div>
+            <div style="font-size: 11px; color: var(--text-muted, #71717a); margin-top: 4px;">Optimal Game Speed</div>
+          </div>
+
+          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">🧠 RAM Usage</span>
+              <span id="perf-ram-pct" style="font-size: 11px; color: #38bdf8; font-weight: 700;">34%</span>
+            </div>
+            <div id="perf-ram-val" style="font-size: 20px; font-weight: 800; color: #f4f4f5; font-family: 'JetBrains Mono', monospace;">2.8 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 8.0 GB</span></div>
+            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 8px; overflow: hidden;">
+              <div id="perf-ram-bar" style="width: 34%; height: 100%; background: linear-gradient(90deg, #38bdf8, #3b82f6); border-radius: 3px; transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+
+          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">⚙️ CPU Load</span>
+              <span id="perf-cpu-pct" style="font-size: 11px; color: #10b981; font-weight: 700;">14%</span>
+            </div>
+            <div id="perf-cpu-val" style="font-size: 20px; font-weight: 800; color: #f4f4f5; font-family: 'JetBrains Mono', monospace;">14.5%</div>
+            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 8px; overflow: hidden;">
+              <div id="perf-cpu-bar" style="width: 14.5%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 3px; transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+
+          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">⏱️ Server Uptime</span>
+              <span class="status-badge status-online" style="font-size: 10px;">Live</span>
+            </div>
+            <div id="perf-uptime-val" style="font-size: 18px; font-weight: 800; color: #f4f4f5; font-family: 'JetBrains Mono', monospace;">24h 12m</div>
+            <div style="font-size: 11px; color: var(--text-muted, #71717a); margin-top: 4px;">Zero downtime recorded</div>
+          </div>
+        </div>
+
         <!-- License Key Panel -->
         <div class="panel">
           <div class="panel-head">
@@ -685,6 +751,20 @@
           </div>
           <div class="panel-footer-note">
             Configuration path: <code>plugins/SVLBridge/config.yml</code> → <code>master-api.license-key</code>
+          </div>
+        </div>
+
+        <!-- Real-Time Online Players Panel -->
+        <div class="panel" style="margin-top: 14px;">
+          <div class="panel-head flex-between">
+            <div>
+              <h4 class="panel-title">👥 Connected Players Real-time Overlook</h4>
+              <p class="panel-subtitle">Players currently connected to your Minecraft instance via Sunveil Bridge.</p>
+            </div>
+            <span id="stat-player-count-badge" class="badge-subtle" style="color: #10b981; font-weight: 700;">0 Players Online</span>
+          </div>
+          <div id="player-list-container" style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 10px; min-height: 48px; align-items: center;">
+            <span style="font-size: 13px; color: var(--text-muted, #71717a); font-style: italic;">No players connected at this moment.</span>
           </div>
         </div>
 
@@ -721,21 +801,6 @@
             <a href="/downloads/svl-bridge-paper.jar" download class="btn btn-secondary btn-sm" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none;">
               <span>📜 Paper / Spigot</span>
               <span style="font-size: 11px; opacity: 0.7;">.jar ⬇</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- BisectHosting Partner Panel in Dashboard -->
-        <div class="panel" style="border: 1px solid rgba(0, 163, 255, 0.3); background: rgba(0, 163, 255, 0.04);">
-          <div class="panel-head flex-between">
-            <div>
-              <h4 class="panel-title" style="color: #38bdf8; display: flex; align-items: center; gap: 6px;">
-                <span>⚡ 24/7 Dedicated Server Hosting</span>
-              </h4>
-              <p class="panel-subtitle">Need a 24/7 cloud server with 1-click modpack setup and NVMe SSDs?</p>
-            </div>
-            <a href="https://www.bisecthosting.com/clients/aff.php?aff=7448" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="white-space: nowrap;">
-              Get 25% Off at BisectHosting ↗
             </a>
           </div>
         </div>
@@ -835,11 +900,16 @@
           </form>
         </div>
 
-        <!-- Account & Security Section -->
+        <!-- Account & Security Section with Trust Score -->
         <div class="panel">
-          <div class="panel-head">
-            <h4 class="panel-title">Account &amp; security</h4>
-            <p class="panel-subtitle">Manage developer account details and data deletion.</p>
+          <div class="panel-head flex-between">
+            <div>
+              <h4 class="panel-title">Account, Trust Score &amp; Security</h4>
+              <p class="panel-subtitle">Hardware fingerprint status, network reputation, and account limits.</p>
+            </div>
+            <span id="account-trust-badge" class="badge-subtle" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 700;">
+              🛡️ Trust: 95/100 (TRUSTED)
+            </span>
           </div>
           <div class="account-info-box">
             <div class="account-row">
@@ -847,15 +917,48 @@
               <strong id="account-email-label" class="data-value">owner@sunveil.net</strong>
             </div>
             <div class="account-row">
+              <span class="data-label">Server Capacity</span>
+              <span id="account-slots-label" class="data-value accent-text">1 of 4 Max Server Slots Active</span>
+            </div>
+            <div class="account-row">
+              <span class="data-label">Device Security &amp; Anti-Alt Sentinel</span>
+              <span id="account-hwid-status" class="data-value" style="color: #38bdf8;">Verified Hardware Fingerprint Linked</span>
+            </div>
+            <div class="account-row">
               <span class="data-label">Session status</span>
-              <span class="data-value">Active Bearer JWT (Expires in 7 days)</span>
+              <span class="data-value">Active Bearer JWT (Secure Session)</span>
             </div>
             <div class="deletion-notice">
-              <strong>Account Deletion:</strong> To request full account and associated server registration deletion, please contact support or use the account termination procedure described in our <a href="/datenschutz.html" class="text-link">Privacy Policy</a>. Associated license keys and server entries will be invalidated upon deletion.
+              <strong>Account &amp; Slot Rules:</strong> Free accounts are restricted to 1 server slot per physical device. To host multiple servers without creating multiple accounts, expand your account capacity up to 4 server slots via the webstore.
             </div>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: ADD NEW SERVER SLOT -->
+  <div id="modal-add-server-slot" class="modal-backdrop hidden">
+    <div class="modal-card" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Additional Server Instance</h3>
+        <button id="btn-close-add-slot-modal" class="modal-close">✕</button>
+      </div>
+      <form id="form-add-server-slot" class="modal-body">
+        <div id="add-slot-alert" class="alert-box hidden"></div>
+        <div class="form-field">
+          <label for="input-new-server-name" class="form-label">Server Name</label>
+          <input type="text" id="input-new-server-name" class="form-input" placeholder="e.g. Creative Building Realm" required maxlength="64">
+        </div>
+        <div class="form-field">
+          <label for="input-new-server-key" class="form-label">Custom Subdomain / Key (Optional)</label>
+          <input type="text" id="input-new-server-key" class="form-input" placeholder="e.g. creative-smp" maxlength="32">
+          <span class="form-help">Leave blank to auto-generate a unique key.</span>
+        </div>
+        <button type="submit" id="btn-submit-add-slot" class="btn btn-primary btn-block" style="margin-top: 14px;">
+          Deploy Server Instance
+        </button>
+      </form>
     </div>
   </div>
 

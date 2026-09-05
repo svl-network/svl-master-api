@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sunveil Admin Control Center — Secret Management Portal</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=6.2">
+  <style>
+    :root {
+      --admin-bg: #090a0f;
+      --admin-surface: rgba(18, 20, 29, 0.85);
+      --admin-border: rgba(255, 255, 255, 0.08);
+      --admin-accent: #6366f1;
+      --admin-danger: #ef4444;
+      --admin-success: #10b981;
+      --admin-warning: #f59e0b;
+    }
+    body {
+      background-color: var(--admin-bg);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+      color: #f4f4f5;
+      min-height: 100vh;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      margin: 0;
+    }
+    .admin-nav {
+      background: rgba(10, 11, 16, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--admin-border);
+      padding: 14px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+    }
+    .admin-badge {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .admin-container {
+      max-width: 1380px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--admin-surface);
+      border: 1px solid var(--admin-border);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .kpi-title {
+      font-size: 12px;
+      color: #a1a1aa;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+    }
+    .admin-tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--admin-border);
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+    }
+    .admin-tab-btn {
+      background: transparent;
+      border: none;
+      color: #a1a1aa;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .admin-tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .admin-tab-btn.active {
+      color: #fff;
+      background: var(--admin-accent);
+    }
+    .admin-table-container {
+      background: var(--admin-surface);
+      border: 1px solid var(--admin-border);
+      border-radius: 12px;
+      overflow-x: auto;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+    .admin-table th {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 14px 16px;
+      font-weight: 700;
+      color: #a1a1aa;
+      border-bottom: 1px solid var(--admin-border);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    .admin-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #e4e4e7;
+    }
+    .admin-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .action-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-action {
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-action-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .btn-action-danger:hover {
+      background: #ef4444;
+      color: #fff;
+    }
+    .btn-action-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .btn-action-success:hover {
+      background: #10b981;
+      color: #fff;
+    }
+    .btn-action-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e4e4e7;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .btn-action-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+    .auth-gate-card {
+      max-width: 440px;
+      margin: 100px auto;
+      background: var(--admin-surface);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    .tier-badge {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .tier-FREE { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+    .tier-PRO { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+    .tier-SPONSOR { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .tier-ENTERPRISE { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+  </style>
+</head>
+<body>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- AUTHENTICATION GATE (Visible if not authenticated) -->
+  <div id="admin-auth-gate" class="auth-gate-card">
+    <div style="margin-bottom: 20px;">
+      <span class="admin-badge">🔒 Restricted Admin Area</span>
+      <h2 style="font-size: 22px; font-weight: 800; margin-top: 12px; margin-bottom: 6px;">Sunveil Control Center</h2>
+      <p style="font-size: 13px; color: #a1a1aa; margin: 0;">Enter the master admin secret to authenticate elevated administrative access.</p>
+    </div>
+
+    <div id="gate-alert" class="alert-box hidden" style="margin-bottom: 16px;"></div>
+
+    <form id="gate-form">
+      <div class="form-field" style="text-align: left;">
+        <label for="input-admin-secret" class="form-label" style="font-size: 12px;">Master Admin Secret</label>
+        <input type="password" id="input-admin-secret" class="form-input" placeholder="••••••••••••••••" required autocomplete="current-password" autofocus>
+      </div>
+      <button type="submit" id="btn-gate-submit" class="btn btn-primary btn-block" style="margin-top: 16px; background: var(--admin-accent);">
+        Authenticate &amp; Unlock Console
+      </button>
+      <div style="margin-top: 16px;">
+        <a href="/" class="text-link" style="font-size: 12px; color: #71717a;">← Return to Public Realms</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- MAIN ADMIN DASHBOARD (Visible upon successful authentication) -->
+  <div id="admin-main-view" class="hidden">
+    <!-- Navbar -->
+    <header class="admin-nav">
+      <div class="admin-brand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span>Sunveil Secret Admin Console</span>
+        <span class="admin-badge">Master Control</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span id="admin-actor-label" style="font-size: 12px; font-family: monospace; color: #10b981;">● root_admin</span>
+        <button id="btn-refresh-all" class="btn btn-secondary btn-sm" title="Refresh data">
+          🔄 Refresh
+        </button>
+        <button id="btn-admin-logout" class="btn btn-action-danger btn-sm">
+          Lock &amp; Sign out
+        </button>
+      </div>
+    </header>
+
+    <div class="admin-container">
+      <!-- KPI Overview Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">🌐 Registered Servers</div>
+          <div id="kpi-total-servers" class="kpi-value">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">🟢 Active Online</div>
+          <div id="kpi-online-servers" class="kpi-value" style="color: #10b981;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">👥 Connected Players</div>
+          <div id="kpi-online-players" class="kpi-value" style="color: #38bdf8;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">🚫 Banned Servers</div>
+          <div id="kpi-banned-servers" class="kpi-value" style="color: #f87171;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">🔑 Total Licenses</div>
+          <div id="kpi-total-licenses" class="kpi-value" style="color: #c084fc;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">⚡ Server Memory</div>
+          <div id="kpi-memory" class="kpi-value" style="font-size: 22px;">0 MB</div>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="admin-tabs">
+        <button class="admin-tab-btn active" data-tab="tab-servers">🖥️ Servers Overlook</button>
+        <button class="admin-tab-btn" data-tab="tab-licenses">🔑 License Registry</button>
+        <button class="admin-tab-btn" data-tab="tab-audit">🔒 Security Audit Trail</button>
+      </div>
+
+      <!-- TAB 1: SERVERS OVERLOOK -->
+      <section id="tab-servers" class="admin-tab-pane">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap;">
+          <input type="text" id="filter-servers" class="form-input" placeholder="🔍 Search servers by key, name, owner email, or IP..." style="max-width: 400px; font-size: 13px;">
+          <div style="display: flex; gap: 8px;">
+            <select id="filter-server-status" class="form-input" style="font-size: 13px; width: auto;">
+              <option value="all">All Servers</option>
+              <option value="online">Online Only</option>
+              <option value="banned">Banned Only</option>
+              <option value="sponsored">Sponsored Only</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Server Key</th>
+                <th>Name / MOTD</th>
+                <th>Endpoint</th>
+                <th>Version</th>
+                <th>Players</th>
+                <th>Owner</th>
+                <th>Boosts</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="servers-table-body">
+              <tr>
+                <td colspan="9" style="text-align: center; color: #71717a;">Loading servers...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 2: LICENSE REGISTRY -->
+      <section id="tab-licenses" class="admin-tab-pane hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap;">
+          <input type="text" id="filter-licenses" class="form-input" placeholder="🔍 Search licenses by key, email, tier..." style="max-width: 400px; font-size: 13px;">
+          <button id="btn-open-create-license" class="btn btn-primary btn-sm" style="background: var(--admin-accent);">
+            ➕ Generate New License
+          </button>
+        </div>
+
+        <div class="admin-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>License Key</th>
+                <th>Tier</th>
+                <th>Status</th>
+                <th>Owner Email</th>
+                <th>Associated Server</th>
+                <th>Notes</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="licenses-table-body">
+              <tr>
+                <td colspan="8" style="text-align: center; color: #71717a;">Loading licenses...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: AUDIT TRAIL -->
+      <section id="tab-audit" class="admin-tab-pane hidden">
+        <div style="margin-bottom: 14px;">
+          <h4 style="margin: 0; font-size: 14px; color: #a1a1aa;">Immutable Cryptographic Action Audit Trail</h4>
+        </div>
+        <div class="admin-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Actor</th>
+                <th>IP Address</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body">
+              <tr>
+                <td colspan="6" style="text-align: center; color: #71717a;">Loading audit logs...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- CREATE LICENSE MODAL -->
+  <div id="modal-create-license" class="modal-backdrop hidden">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Generate Server License</h3>
+        <button id="btn-close-license-modal" class="modal-close">✕</button>
+      </div>
+      <form id="form-create-license" class="modal-body">
+        <div class="form-field">
+          <label class="form-label">Tier / Privilege</label>
+          <select id="lic-tier" class="form-input">
+            <option value="FREE">FREE</option>
+            <option value="PRO">PRO</option>
+            <option value="SPONSOR" selected>SPONSOR</option>
+            <option value="ENTERPRISE">ENTERPRISE</option>
+            <option value="PARTNER">PARTNER</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Assign to Email (Optional)</label>
+          <input type="email" id="lic-email" class="form-input" placeholder="user@example.com">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Custom License Key (Optional, auto-generated if blank)</label>
+          <input type="text" id="lic-custom-key" class="form-input" placeholder="SVL-SPONSOR-XXXX-XXXX">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Internal Notes / Reason</label>
+          <input type="text" id="lic-notes" class="form-input" placeholder="Granted for verified partner realm">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 14px; background: var(--admin-accent);">
+          Generate &amp; Save License
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SERVER INSPECTOR MODAL -->
+  <div id="modal-inspect-server" class="modal-backdrop hidden">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <h3 class="modal-title" id="inspect-server-title">Server Telemetry Inspector</h3>
+        <button id="btn-close-inspect-modal" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="inspect-server-content">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin.js?v=6.2"></script>
+</body>
+</html>
