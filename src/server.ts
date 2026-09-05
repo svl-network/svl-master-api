@@ -42,7 +42,8 @@ import {
   seedDemoUser,
   loadDatabaseFromDisk,
   saveDatabaseToDisk,
-  getDataDir
+  getDataDir,
+  findUserByIdentifier
 } from "./auth.js";
 import { relayServer } from "./tunnel/RelayServer.js";
 
@@ -1151,6 +1152,104 @@ const handleRegenerateKey = async (request: FastifyRequest, reply: FastifyReply)
 
 fastify.post("/api/v1/user/license/regenerate", { preHandler: [requireUserAuth] }, handleRegenerateKey);
 fastify.post("/api/v1/user/regenerate-key", { preHandler: [requireUserAuth] }, handleRegenerateKey);
+
+// 15. Automated Tebex Store Webhook Handler
+const handleTebexWebhook = async (request: FastifyRequest, reply: FastifyReply) => {
+  const body = (request.body || {}) as any;
+  const webhookType = body.type || body.event || "";
+  const webhookId = body.id || "";
+
+  // 1. Initial Webhook Verification Ping from Tebex Creator Dashboard
+  if (webhookType === "validation.webhook" || webhookType === "validation") {
+    console.log(`[Tebex Webhook] Received validation ping from Tebex (ID: ${webhookId})`);
+    return reply.status(200).send({ id: webhookId, status: "validated" });
+  }
+
+  // 2. Handle Completed Payment
+  if (webhookType === "payment.completed" || webhookType === "order.completed" || !webhookType) {
+    const subject = body.subject || body;
+    const customer = subject.customer || {};
+    const email = customer.email || subject.email || "";
+    const username = customer.username?.username || customer.username || subject.username || "";
+    const products = subject.products || subject.packages || [];
+    const transactionId = subject.transaction_id || subject.txn_id || webhookId || "unknown";
+
+    console.log(`[Tebex Webhook] Payment received! TXN: ${transactionId} | Buyer: ${email || username}`);
+
+    // Determine what was bought
+    let isBoostOrSponsor = false;
+    let boostBonus = 0;
+
+    for (const prod of products) {
+      const prodName = (prod.name || prod.package_name || "").toLowerCase();
+      if (
+        prodName.includes("boost") ||
+        prodName.includes("sponsor") ||
+        prodName.includes("featured") ||
+        prodName.includes("server")
+      ) {
+        isBoostOrSponsor = true;
+        boostBonus += 25 * (prod.quantity || 1);
+      }
+    }
+
+    // Locate matching server/user in our database
+    let targetUser: User | undefined;
+    if (email) targetUser = findUserByIdentifier(email);
+    if (!targetUser && username) targetUser = findUserByIdentifier(username);
+
+    // Also check any custom fields passed during checkout
+    if (!targetUser && subject.custom) {
+      for (const val of Object.values(subject.custom)) {
+        if (typeof val === "string") {
+          const found = findUserByIdentifier(val);
+          if (found) {
+            targetUser = found;
+            break;
+          }
+        }
+      }
+    }
+
+    if (targetUser && isBoostOrSponsor) {
+      targetUser.sponsored = true;
+      targetUser.boosts = (targetUser.boosts || 0) + (boostBonus || 25);
+
+      const activeServer = serverStore.get(targetUser.serverKey) || serverStore.get(targetUser.licenseKey);
+      if (activeServer) {
+        activeServer.sponsored = true;
+        activeServer.boosts = targetUser.boosts;
+      }
+
+      saveDatabaseToDisk();
+      saveServersToDisk();
+      console.log(`[Tebex Webhook] ✅ Automatically activated Sponsor & Boosts (+${boostBonus || 25}) for ${targetUser.email} (Server: ${targetUser.serverKey})`);
+    } else if (!targetUser) {
+      console.log(`[Tebex Webhook] Notice: No local Sunveil realm user matched for '${email || username}'. (In-Game SMP Ranks are handled directly via Minecraft Tebex Plugin).`);
+    }
+
+    return reply.status(200).send({
+      success: true,
+      processed: true,
+      transactionId,
+      matchedUser: targetUser?.email || null
+    });
+  }
+
+  // Fallback for other events
+  return reply.status(200).send({ success: true, event: webhookType });
+};
+
+fastify.post("/api/tebex/webhook", handleTebexWebhook);
+fastify.post("/api/v1/tebex/webhook", handleTebexWebhook);
+fastify.get("/api/tebex/webhook", async (req, reply) => {
+  return {
+    status: "active",
+    service: "Sunveil Tebex Webhook Receiver",
+    time: new Date().toISOString()
+  };
+});
+
 
 // Single Page Application & Custom 404 Page Handler
 fastify.setNotFoundHandler((request, reply) => {

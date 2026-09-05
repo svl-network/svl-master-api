@@ -272,3 +272,29 @@ export const seedDemoUser = () => {
     userIdStore.set(user.id, user);
   }
 };
+
+/**
+ * Searches for a user by email, serverKey, licenseKey, or ID (case-insensitive)
+ */
+export const findUserByIdentifier = (identifier: string): User | undefined => {
+  if (!identifier) return undefined;
+  const clean = identifier.trim().toLowerCase();
+  
+  // 1. Direct email lookup
+  if (userStore.has(clean)) {
+    return userStore.get(clean);
+  }
+  
+  // 2. Scan all users
+  for (const user of userStore.values()) {
+    if (
+      user.email.toLowerCase() === clean ||
+      user.serverKey.toLowerCase() === clean ||
+      user.licenseKey.toLowerCase() === clean ||
+      user.id.toLowerCase() === clean
+    ) {
+      return user;
+    }
+  }
+  return undefined;
+};
