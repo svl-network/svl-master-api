@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://realms.sunveil.net/sitemap.xml

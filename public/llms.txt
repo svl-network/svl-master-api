@@ -1,0 +1,17 @@
+# Sunveil Network & Sunveil Connect
+
+> Zero-Portforwarding Minecraft Realm Tunnels, Native Mod Distribution, and Enterprise-Grade Multiplayer Networking.
+
+## Overview
+Sunveil Connect is a high-performance desktop launcher and networking bridge for Minecraft servers. It eliminates the need for manual port-forwarding, dynamic DNS, or third-party VPN software by providing secure, encrypted multiplexed TCP relays directly from client to server.
+
+## Components
+- **Sunveil Bridge**: Server-side plugin/mod for Paper, Spigot, Fabric, Forge, and NeoForge (Minecraft 1.20 - 1.21.x).
+- **Sunveil Master API & Relay**: Fastify & WebSocket-based zero-copy TCP packet router with DDOS rate-limiting and Slowloris protection.
+- **Sunveil Connect Desktop**: Qt6 / C++ native launcher for seamless 1-click modpack synchronization and multiplayer joining.
+
+## Documentation & Endpoints
+- Homepage: https://realms.sunveil.net/
+- GitHub Client: https://github.com/svl-network/svl-connect
+- GitHub Bridge: https://github.com/svl-network/svl-bridge
+- GitHub Master API: https://github.com/svl-network/svl-master-api
