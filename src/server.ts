@@ -285,24 +285,24 @@ export interface ModInfo {
 }
 
 export interface ServerLinks {
-  store?: string;
-  discord?: string;
-  website?: string;
+  store?: string | undefined;
+  discord?: string | undefined;
+  website?: string | undefined;
 }
 
 export interface ServerPerformance {
-  cpuPercent?: number;
-  ramUsedMB?: number;
-  ramMaxMB?: number;
-  tps?: number;
-  uptimeSeconds?: number;
+  cpuPercent?: number | undefined;
+  ramUsedMB?: number | undefined;
+  ramMaxMB?: number | undefined;
+  tps?: number | undefined;
+  uptimeSeconds?: number | undefined;
 }
 
 export interface PlayerEntry {
   name: string;
-  uuid?: string;
-  ping?: number;
-  joinedAt?: number;
+  uuid?: string | undefined;
+  ping?: number | undefined;
+  joinedAt?: number | undefined;
 }
 
 export interface ServerPayload {
@@ -310,7 +310,7 @@ export interface ServerPayload {
   name: string;
   ip: string;
   port: number;
-  region?: string;
+  region?: string | undefined;
   version: {
     minecraft: string;
     loader: string;
@@ -321,21 +321,21 @@ export interface ServerPayload {
     maxPlayers: number;
     motd: string;
   };
-  icon?: string;
+  icon?: string | undefined;
   mods: ModInfo[];
-  lastHeartbeat?: number;
-  verified?: boolean;
-  boosts?: number;
-  sponsored?: boolean;
-  bannerUrl?: string | null;
-  links?: ServerLinks;
-  isBanned?: boolean;
-  banReason?: string;
-  bannedAt?: number;
-  performance?: ServerPerformance;
-  playerList?: (string | PlayerEntry)[];
-  ownerEmail?: string;
-  slotIndex?: number;
+  lastHeartbeat?: number | undefined;
+  verified?: boolean | undefined;
+  boosts?: number | undefined;
+  sponsored?: boolean | undefined;
+  bannerUrl?: string | null | undefined;
+  links?: ServerLinks | undefined;
+  isBanned?: boolean | undefined;
+  banReason?: string | undefined;
+  bannedAt?: number | undefined;
+  performance?: ServerPerformance | undefined;
+  playerList?: (string | PlayerEntry)[] | undefined;
+  ownerEmail?: string | undefined;
+  slotIndex?: number | undefined;
 }
 
 // Persistent Server Stores

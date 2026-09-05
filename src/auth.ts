@@ -68,33 +68,33 @@ export interface User {
   salt: string;
   licenseKey: string;
   serverKey: string;
-  serverKeys?: string[];       // Array of owned server keys (up to serverSlots)
-  serverSlots?: number;        // Max servers allowed (1 free, up to 4 upgraded)
+  serverKeys?: string[] | undefined;       // Array of owned server keys (up to serverSlots)
+  serverSlots?: number | undefined;        // Max servers allowed (1 free, up to 4 upgraded)
   createdAt: number;
   boosts: number;
-  lastBoostAt?: number;
+  lastBoostAt?: number | undefined;
   sponsored: boolean;
-  role?: "admin" | "user";
-  isBanned?: boolean;
-  banReason?: string;
-  bannedAt?: number;
-  bannerUrl?: string;
+  role?: "admin" | "user" | undefined;
+  isBanned?: boolean | undefined;
+  banReason?: string | undefined;
+  bannedAt?: number | undefined;
+  bannerUrl?: string | undefined;
   links?: {
-    store?: string;
-    discord?: string;
-    website?: string;
-  };
-  tosAgreedAt?: number;
-  tosAgreedIp?: string;
-  antiMalwareAffirmed?: boolean;
+    store?: string | undefined;
+    discord?: string | undefined;
+    website?: string | undefined;
+  } | undefined;
+  tosAgreedAt?: number | undefined;
+  tosAgreedIp?: string | undefined;
+  antiMalwareAffirmed?: boolean | undefined;
   
   // Hardware Fingerprint & Trust Score Metrics
-  hwid?: string;
-  ipHistory?: string[];
-  trustScore?: number;         // 0 to 100
-  trustLevel?: TrustLevel;
-  trustFlags?: string[];
-  lastTrustEvaluation?: number;
+  hwid?: string | undefined;
+  ipHistory?: string[] | undefined;
+  trustScore?: number | undefined;         // 0 to 100
+  trustLevel?: TrustLevel | undefined;
+  trustFlags?: string[] | undefined;
+  lastTrustEvaluation?: number | undefined;
 }
 
 export type LicenseTier = "FREE" | "PRO" | "SPONSOR" | "ENTERPRISE" | "PARTNER" | "CUSTOM";
@@ -102,14 +102,14 @@ export type LicenseTier = "FREE" | "PRO" | "SPONSOR" | "ENTERPRISE" | "PARTNER" 
 export interface LicenseEntry {
   licenseKey: string;
   tier: LicenseTier;
-  ownerEmail?: string;
-  serverKey?: string;
+  ownerEmail?: string | undefined;
+  serverKey?: string | undefined;
   status: "active" | "revoked" | "banned" | "expired";
   createdAt: number;
-  expiresAt?: number | null;
-  revocationReason?: string;
-  maxPlayers?: number;
-  notes?: string;
+  expiresAt?: number | null | undefined;
+  revocationReason?: string | undefined;
+  maxPlayers?: number | undefined;
+  notes?: string | undefined;
 }
 
 export interface AuditLogEntry {
@@ -118,8 +118,8 @@ export interface AuditLogEntry {
   action: string;
   target: string;
   actor: string;
-  ip?: string;
-  details?: string;
+  ip?: string | undefined;
+  details?: string | undefined;
 }
 
 export const userStore = new Map<string, User>(); // email -> User
@@ -212,7 +212,7 @@ export interface TrustEvaluationResult {
   linkedHwidAccounts: number;
   linkedIpAccounts: number;
   blocked: boolean;
-  blockReason?: string;
+  blockReason?: string | undefined;
 }
 
 export const evaluateTrustScore = (
