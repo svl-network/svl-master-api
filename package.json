@@ -19,6 +19,7 @@
   "author": "Sunveil Network",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.0",
     "@fastify/multipart": "^10.1.1",

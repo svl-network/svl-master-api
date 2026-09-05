@@ -2,7 +2,15 @@
  * Sunveil Secret Admin Control Center — Dashboard Client Logic
  */
 
-let adminToken = sessionStorage.getItem("svl_admin_jwt") || "";
+// Security Hygiene: Purge any legacy unencrypted tokens from browser storage
+try {
+  localStorage.removeItem("svl_jwt_token");
+  localStorage.removeItem("svl_realms_session_jwt");
+  localStorage.removeItem("svl_admin_jwt");
+  sessionStorage.removeItem("svl_admin_jwt");
+} catch {}
+
+let adminToken = "";
 let globalServers = [];
 let globalLicenses = [];
 let globalAuditLogs = [];
@@ -84,10 +92,8 @@ function initAdminApp() {
     closeInspectBtn.addEventListener("click", () => inspectModal.classList.add("hidden"));
   }
 
-  // Check existing session
-  if (adminToken) {
-    verifyAndLaunchAdmin();
-  }
+  // Probe existing HttpOnly cookie session
+  verifyAndLaunchAdmin();
 }
 
 async function handleAdminLogin(e) {
@@ -109,6 +115,7 @@ async function handleAdminLogin(e) {
     const res = await fetch("/api/v1/admin/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ secretKey: secret })
     });
 
@@ -117,8 +124,7 @@ async function handleAdminLogin(e) {
       throw new Error(data.message || "Invalid administrative secret.");
     }
 
-    adminToken = data.token;
-    sessionStorage.setItem("svl_admin_jwt", adminToken);
+    adminToken = data.token || "";
     showToast("Authenticated as Root Administrator.");
 
     showAdminView();
@@ -137,10 +143,16 @@ async function handleAdminLogin(e) {
   }
 }
 
-function handleAdminLogout() {
+async function handleAdminLogout() {
   adminToken = "";
-  sessionStorage.removeItem("svl_admin_jwt");
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+
+  try {
+    await fetch("/api/v1/admin/logout", {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch {}
 
   document.getElementById("admin-main-view").classList.add("hidden");
   document.getElementById("admin-auth-gate").classList.remove("hidden");
@@ -149,19 +161,22 @@ function handleAdminLogout() {
 
 async function verifyAndLaunchAdmin() {
   try {
+    const headers = {};
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch("/api/v1/admin/overview", {
-      headers: { "Authorization": `Bearer ${adminToken}` }
+      headers,
+      credentials: "include"
     });
 
     if (!res.ok) {
-      handleAdminLogout();
       return;
     }
 
     showAdminView();
     loadAllAdminData();
   } catch {
-    handleAdminLogout();
+    // Guest / unauthenticated state is fine on initial load
   }
 }
 
@@ -177,14 +192,15 @@ function showAdminView() {
 }
 
 async function loadAllAdminData(showNotice = false) {
-  if (!adminToken) return;
-
   try {
+    const headers = {};
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const [overviewRes, serversRes, licensesRes, auditRes] = await Promise.all([
-      fetch("/api/v1/admin/overview", { headers: { "Authorization": `Bearer ${adminToken}` } }),
-      fetch("/api/v1/admin/servers", { headers: { "Authorization": `Bearer ${adminToken}` } }),
-      fetch("/api/v1/admin/licenses", { headers: { "Authorization": `Bearer ${adminToken}` } }),
-      fetch("/api/v1/admin/audit-logs", { headers: { "Authorization": `Bearer ${adminToken}` } })
+      fetch("/api/v1/admin/overview", { headers, credentials: "include" }),
+      fetch("/api/v1/admin/servers", { headers, credentials: "include" }),
+      fetch("/api/v1/admin/licenses", { headers, credentials: "include" }),
+      fetch("/api/v1/admin/audit-logs", { headers, credentials: "include" })
     ]);
 
     if (overviewRes.status === 401 || overviewRes.status === 403) {
@@ -393,12 +409,13 @@ window.toggleBanServer = async function(serverKey, shouldBan) {
   }
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch(`/api/v1/admin/servers/${encodeURIComponent(serverKey)}/ban`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${adminToken}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ banned: shouldBan, reason })
     });
 
@@ -418,9 +435,13 @@ window.deleteServer = async function(serverKey) {
   }
 
   try {
+    const headers = {};
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch(`/api/v1/admin/servers/${encodeURIComponent(serverKey)}`, {
       method: "DELETE",
-      headers: { "Authorization": `Bearer ${adminToken}` }
+      headers,
+      credentials: "include"
     });
 
     const data = await res.json();
@@ -443,12 +464,13 @@ window.adjustUserSlots = async function(userId, currentSlots = 1) {
   }
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch(`/api/v1/admin/users/${encodeURIComponent(userId)}/slots`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${adminToken}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ serverSlots: newSlots })
     });
     const data = await res.json();
@@ -471,12 +493,13 @@ window.adjustUserTrust = async function(userId, currentScore = 85) {
   }
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch(`/api/v1/admin/users/${encodeURIComponent(userId)}/trust`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${adminToken}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ trustScore: newScore })
     });
     const data = await res.json();
@@ -595,12 +618,13 @@ async function handleCreateLicense(e) {
   const notes = document.getElementById("lic-notes")?.value.trim();
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch("/api/v1/admin/licenses/create", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${adminToken}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ tier, ownerEmail, customKey, notes })
     });
 
@@ -623,12 +647,13 @@ window.toggleLicenseStatus = async function(licenseKey, newStatus) {
   }
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch(`/api/v1/admin/licenses/${encodeURIComponent(licenseKey)}/revoke`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${adminToken}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ status: newStatus, reason })
     });
 
@@ -646,9 +671,13 @@ window.deleteLicense = async function(licenseKey) {
   if (!confirm(`Delete license key '${licenseKey}' permanently?`)) return;
 
   try {
+    const headers = {};
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
     const res = await fetch(`/api/v1/admin/licenses/${encodeURIComponent(licenseKey)}`, {
       method: "DELETE",
-      headers: { "Authorization": `Bearer ${adminToken}` }
+      headers,
+      credentials: "include"
     });
 
     const data = await res.json();

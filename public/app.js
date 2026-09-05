@@ -10,7 +10,14 @@
  * private use with your own server infrastructure only. Redistribution,
  * public hosting, or creating derivative works is a direct violation of copyright.
  */
-const STORAGE_TOKEN_KEY = "svl_jwt_token";
+// Security Hygiene: Purge any legacy unencrypted tokens from browser localStorage
+try {
+  localStorage.removeItem("svl_jwt_token");
+  localStorage.removeItem("svl_realms_session_jwt");
+  localStorage.removeItem("svl_admin_jwt");
+} catch {}
+
+let inMemoryJwt = null;
 let currentAuthTab = "login";
 let currentUserData = null;
 let currentKeyVisible = false;
@@ -41,21 +48,17 @@ function getDeviceFingerprint() {
   }
 }
 
-// Helper: Retrieve JWT Token from localStorage
+// In-Memory Token Handling (Immune to disk persistence leaks and XSS extraction)
 function getAuthToken() {
-  return localStorage.getItem(STORAGE_TOKEN_KEY) || localStorage.getItem("svl_realms_session_jwt");
+  return inMemoryJwt;
 }
 
-// Helper: Set JWT Token in localStorage
 function setAuthToken(token) {
-  localStorage.setItem(STORAGE_TOKEN_KEY, token);
-  localStorage.setItem("svl_realms_session_jwt", token);
+  inMemoryJwt = token;
 }
 
-// Helper: Remove JWT Token
 function removeAuthToken() {
-  localStorage.removeItem(STORAGE_TOKEN_KEY);
-  localStorage.removeItem("svl_realms_session_jwt");
+  inMemoryJwt = null;
 }
 
 // Initialization & Event Binding
@@ -194,34 +197,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Check Session & Update Navigation
 async function checkSessionState() {
-  const token = getAuthToken();
   const guestNav = document.getElementById("nav-guest-actions");
   const userNav = document.getElementById("nav-user-actions");
 
-  if (token) {
-    try {
-      const res = await fetch("/api/v1/user/dashboard", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "x-client-device-fingerprint": getDeviceFingerprint(),
-          "x-svl-hwid": getDeviceFingerprint()
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        currentUserData = data;
-        renderDashboard(data);
-        const emailEl = document.getElementById("nav-user-email");
-        if (emailEl) emailEl.innerText = data.user.email;
-        if (guestNav) guestNav.classList.add("hidden");
-        if (userNav) userNav.classList.remove("hidden");
-        return;
-      } else if (res.status === 401 || res.status === 403) {
-        removeAuthToken();
-      }
-    } catch (e) {
-      console.warn("Live session verification failed:", e);
+  try {
+    const headers = {
+      "x-client-device-fingerprint": getDeviceFingerprint(),
+      "x-svl-hwid": getDeviceFingerprint()
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch("/api/v1/user/dashboard", {
+      headers,
+      credentials: "include"
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      currentUserData = data;
+      renderDashboard(data);
+      const emailEl = document.getElementById("nav-user-email");
+      if (emailEl) emailEl.innerText = data.user.email;
+      if (guestNav) guestNav.classList.add("hidden");
+      if (userNav) userNav.classList.remove("hidden");
+      return;
+    } else if (res.status === 401 || res.status === 403) {
+      removeAuthToken();
     }
+  } catch (e) {
+    console.warn("Live session verification failed:", e);
   }
 
   // Fallback to guest state
@@ -243,9 +248,15 @@ function closeAuthModal() {
 }
 
 function openDashboardModal() {
-  const token = getAuthToken();
-  if (!token) {
-    openAuthModal("login");
+  if (!currentUserData) {
+    checkSessionState().then(() => {
+      if (!currentUserData) {
+        openAuthModal("login");
+      } else {
+        const modal = document.getElementById("dashboard-modal");
+        if (modal) modal.classList.remove("hidden");
+      }
+    });
     return;
   }
   fetchDashboardData(false);
@@ -398,6 +409,7 @@ async function handleAuthSubmit(event) {
         "x-client-device-fingerprint": getDeviceFingerprint(),
         "x-svl-hwid": getDeviceFingerprint()
       },
+      credentials: "include",
       body: JSON.stringify(reqBody)
     });
 
@@ -407,7 +419,9 @@ async function handleAuthSubmit(event) {
       throw new Error(data.message || "Authentication failed.");
     }
 
-    setAuthToken(data.token);
+    if (data.token) {
+      setAuthToken(data.token);
+    }
     closeAuthModal();
     showToast(currentAuthTab === "register" ? "Account created successfully with verified security pledge." : "Signed in.");
     
@@ -429,12 +443,6 @@ async function handleAuthSubmit(event) {
 
 // Fetch Protected Dashboard Data from Live API (No Mocks)
 async function fetchDashboardData(manual = false) {
-  const token = getAuthToken();
-  if (!token) {
-    openAuthModal("login");
-    return;
-  }
-
   const syncBtn = document.getElementById("btn-sync-dash");
   const syncSvg = syncBtn ? syncBtn.querySelector("svg") : null;
 
@@ -447,12 +455,16 @@ async function fetchDashboardData(manual = false) {
   }
 
   try {
+    const headers = {
+      "x-client-device-fingerprint": getDeviceFingerprint(),
+      "x-svl-hwid": getDeviceFingerprint()
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/v1/user/dashboard", {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "x-client-device-fingerprint": getDeviceFingerprint(),
-        "x-svl-hwid": getDeviceFingerprint()
-      }
+      headers,
+      credentials: "include"
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -758,16 +770,17 @@ function renderDashboard(data) {
 
 // Switch Active Server Slot via Live API
 async function selectServerSlot(serverKey) {
-  const token = getAuthToken();
-  if (!token) return;
-
   try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/v1/user/servers/select", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ serverKey })
     });
 
@@ -786,11 +799,6 @@ async function selectServerSlot(serverKey) {
 // Handle Additional Server Slot Creation Form Submit
 async function handleCreateServerSlot(event) {
   event.preventDefault();
-  const token = getAuthToken();
-  if (!token) {
-    openAuthModal("login");
-    return;
-  }
 
   const alertBox = document.getElementById("add-slot-alert");
   const submitBtn = document.getElementById("btn-submit-add-slot");
@@ -808,12 +816,16 @@ async function handleCreateServerSlot(event) {
   }
 
   try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/v1/user/servers/create", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ name, serverKey })
     });
 
@@ -881,19 +893,17 @@ async function regenerateLicenseKey() {
     return;
   }
 
-  const token = getAuthToken();
-  if (!token) {
-    openAuthModal("login");
-    return;
-  }
-
   try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/v1/user/license/regenerate", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({})
     });
 
@@ -916,24 +926,22 @@ async function regenerateLicenseKey() {
 
 // Apply Server Boost via Live API
 async function applyServerBoost(amount = 1) {
-  const token = getAuthToken();
-  if (!token) {
-    openAuthModal("login");
-    return;
-  }
-
   const addBoostBtn = document.getElementById("btn-add-boost");
   if (addBoostBtn) {
     addBoostBtn.disabled = true;
   }
 
   try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/v1/user/boost", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ amount })
     });
     const data = await res.json();
@@ -953,11 +961,6 @@ async function applyServerBoost(amount = 1) {
 // Handle Settings Form Submission via Live API
 async function handleSettingsSubmit(event) {
   event.preventDefault();
-  const token = getAuthToken();
-  if (!token) {
-    openAuthModal("login");
-    return;
-  }
 
   const submitBtn = event.target ? event.target.querySelector('button[type="submit"]') : null;
   const bannerInput = document.getElementById("input-banner-url");
@@ -973,12 +976,16 @@ async function handleSettingsSubmit(event) {
   }
 
   try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/v1/user/settings", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify({
         bannerUrl,
         storeUrl,
@@ -1006,9 +1013,15 @@ async function handleSettingsSubmit(event) {
 }
 
 // Logout
-function handleLogout() {
+async function handleLogout() {
   removeAuthToken();
   currentUserData = null;
+  try {
+    await fetch("/api/v1/auth/logout", {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch {}
   closeDashboardModal();
   checkSessionState();
   showToast("Signed out.");

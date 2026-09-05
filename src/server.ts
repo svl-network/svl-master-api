@@ -17,6 +17,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import fastifyMultipart from "@fastify/multipart";
+import cookie from "@fastify/cookie";
 import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
@@ -90,6 +91,10 @@ const fastify = Fastify({
 });
 
 // Register Plugins BEFORE routes
+await fastify.register(cookie, {
+  secret: process.env.COOKIE_SECRET || "svl_secure_cookie_secret_2026_x89"
+});
+
 await fastify.register(cors, {
   origin: (origin, cb) => {
     // Allow non-browser requests (e.g. Minecraft plugins, launchers, curl)
@@ -514,9 +519,21 @@ const requireAdminAuth = async (request: FastifyRequest, reply: FastifyReply) =>
     return;
   }
 
-  const authHeader = request.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.substring(7).trim();
+  // 1. Check HttpOnly Cookie
+  let token: string | undefined;
+  if (request.cookies && request.cookies.svl_admin_session) {
+    token = request.cookies.svl_admin_session;
+  }
+
+  // 2. Fallback to Authorization Bearer header
+  if (!token) {
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    }
+  }
+
+  if (token) {
     if (verifyAdminSecret(token)) {
       (request as any).adminActor = "bearer_master_secret";
       return;
@@ -959,16 +976,28 @@ fastify.get("/api/v1/updates/latest", async () => {
 
 // User JWT Authentication Pre-Handler
 const requireUserAuth = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  // 1. Check HttpOnly Cookie
+  let token: string | undefined;
+  if (request.cookies && request.cookies.svl_session) {
+    token = request.cookies.svl_session;
+  }
+
+  // 2. Fallback to Authorization Bearer header (for plugins, CLI, curl)
+  if (!token) {
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    }
+  }
+
+  if (!token) {
     return reply.status(401).send({
       statusCode: 401,
       error: "Unauthorized",
-      message: "Missing or invalid session authorization token."
+      message: "Missing or invalid session authorization."
     });
   }
 
-  const token = authHeader.substring(7).trim();
   const payload = verifyJWT(token);
   if (!payload) {
     return reply.status(401).send({
@@ -1119,6 +1148,15 @@ fastify.post<{ Body: { email?: string; password?: string; tosAgreed?: boolean; t
 
     const token = generateJWT(newUser);
 
+    const isHttps = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
+    reply.setCookie("svl_session", token, {
+      path: "/",
+      httpOnly: true,
+      secure: isHttps || process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60
+    });
+
     return {
       success: true,
       token,
@@ -1184,6 +1222,15 @@ fastify.post<{ Body: { email?: string; password?: string; hwid?: string } }>("/a
 
   const token = generateJWT(user);
 
+  const isHttps = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
+  reply.setCookie("svl_session", token, {
+    path: "/",
+    httpOnly: true,
+    secure: isHttps || process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60
+  });
+
   return {
     success: true,
     token,
@@ -1198,6 +1245,12 @@ fastify.post<{ Body: { email?: string; password?: string; hwid?: string } }>("/a
       role: user.role || "user"
     }
   };
+});
+
+// 10b. Auth Logout
+fastify.post("/api/v1/auth/logout", async (request, reply) => {
+  reply.clearCookie("svl_session", { path: "/" });
+  return { success: true, message: "Logged out successfully." };
 });
 
 // 11. User Dashboard Metrics & Multi-Server Telemetry
@@ -1756,12 +1809,26 @@ fastify.post<{ Body: { secretKey?: string; password?: string } }>("/api/v1/admin
   const token = generateAdminJWT("root_admin");
   logAdminAction("ADMIN_LOGIN_SUCCESS", "Admin Session", "root_admin", request.ip, "Elevated admin session granted");
 
+  const isHttps = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
+  reply.setCookie("svl_admin_session", token, {
+    path: "/",
+    httpOnly: true,
+    secure: isHttps || process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 24 * 60 * 60
+  });
+
   return {
     success: true,
     token,
     actor: "root_admin",
     expiresIn: "12 hours"
   };
+});
+
+fastify.post("/api/v1/admin/logout", async (request, reply) => {
+  reply.clearCookie("svl_admin_session", { path: "/" });
+  return { success: true, message: "Admin session cleared." };
 });
 
 fastify.get("/api/v1/admin/overview", { preHandler: [requireAdminAuth] }, async () => {
