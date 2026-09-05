@@ -476,28 +476,35 @@ export class RelayServer {
     tunnel.clientSockets.set(connId, clientSocket);
     tunnel.activeClients = tunnel.clientSockets.size;
 
+    clientSocket.setNoDelay(true);
+    clientSocket.setKeepAlive(true, 5000);
+
     // Send PKT_OPEN to Bridge
-    const openFrame = Buffer.alloc(5);
-    openFrame.writeUInt8(PKT_OPEN, 0);
+    const openFrame = Buffer.allocUnsafe(5);
+    openFrame[0] = PKT_OPEN;
     openFrame.writeUInt32BE(connId, 1);
     if (tunnel.ws.readyState === WebSocket.OPEN) {
-      tunnel.ws.send(openFrame);
+      tunnel.ws.send(openFrame, { binary: true, compress: false });
     }
 
     // Send initial handshake payload
-    const header = Buffer.alloc(5);
-    header.writeUInt8(PKT_DATA, 0);
-    header.writeUInt32BE(connId, 1);
-    tunnel.ws.send(Buffer.concat([header, initialPayload]));
-    tunnel.bytesReceived += initialPayload.length;
+    const initialFrame = Buffer.allocUnsafe(5 + initialPayload.length);
+    initialFrame[0] = PKT_DATA;
+    initialFrame.writeUInt32BE(connId, 1);
+    initialPayload.copy(initialFrame, 5);
+    if (tunnel.ws.readyState === WebSocket.OPEN) {
+      tunnel.ws.send(initialFrame, { binary: true, compress: false });
+      tunnel.bytesReceived += initialPayload.length;
+    }
 
-    // Forward stream data
+    // Forward stream data with zero-copy fast buffer
     clientSocket.on("data", (chunk: Buffer) => {
       if (tunnel.ws.readyState === WebSocket.OPEN) {
-        const frameHeader = Buffer.alloc(5);
-        frameHeader.writeUInt8(PKT_DATA, 0);
-        frameHeader.writeUInt32BE(connId, 1);
-        tunnel.ws.send(Buffer.concat([frameHeader, chunk]));
+        const frame = Buffer.allocUnsafe(5 + chunk.length);
+        frame[0] = PKT_DATA;
+        frame.writeUInt32BE(connId, 1);
+        chunk.copy(frame, 5);
+        tunnel.ws.send(frame, { binary: true, compress: false });
         tunnel.bytesReceived += chunk.length;
       }
     });
@@ -506,10 +513,10 @@ export class RelayServer {
       tunnel.clientSockets.delete(connId);
       tunnel.activeClients = tunnel.clientSockets.size;
       if (tunnel.ws.readyState === WebSocket.OPEN) {
-        const closeFrame = Buffer.alloc(5);
-        closeFrame.writeUInt8(PKT_CLOSE, 0);
+        const closeFrame = Buffer.allocUnsafe(5);
+        closeFrame[0] = PKT_CLOSE;
         closeFrame.writeUInt32BE(connId, 1);
-        tunnel.ws.send(closeFrame);
+        tunnel.ws.send(closeFrame, { binary: true, compress: false });
       }
     });
 
