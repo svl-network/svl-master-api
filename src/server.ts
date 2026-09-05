@@ -1104,12 +1104,20 @@ const start = async () => {
     loadDatabaseFromDisk();
     loadServersFromDisk();
     seedDemoServers();
-    const port = Number(process.env.PORT) || 3001;
+
+    // Fastify HTTP Web server port (Railway sets PORT, e.g. 8080 or 3001)
+    // Never let HTTP bind to the Minecraft TCP tunnel port (25565)
+    const tunnelPort = Number(process.env.TUNNEL_MAIN_PORT) || 25565;
+    let httpPort = Number(process.env.PORT) || 8080;
+    if (httpPort === tunnelPort) {
+      console.warn(`⚠️ [SVL-Server] HTTP PORT matches TUNNEL_MAIN_PORT (${tunnelPort}). Shifting HTTP server to port 8080.`);
+      httpPort = 8080;
+    }
     const host = process.env.HOST || "0.0.0.0";
 
-    await fastify.listen({ port, host });
+    await fastify.listen({ port: httpPort, host });
     relayServer.attach(fastify.server);
-    console.log(`\n🚀 SVL Master-API & Realms Portal läuft sicher auf http://localhost:${port}\n`);
+    console.log(`\n🚀 SVL Master-API & Realms Portal läuft sicher auf http://localhost:${httpPort}\n`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
