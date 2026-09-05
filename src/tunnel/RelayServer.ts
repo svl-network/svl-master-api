@@ -507,7 +507,8 @@ export class RelayServer {
       console.log(`🛡️ [SVL-Tunnel] Realm '${serverKey}' online: ${serverKey}.${this.publicDomain} (:25565) & Fallback :${port}`);
     });
 
-    const directHost = process.env.TUNNEL_PUBLIC_HOST || this.publicDomain || "realms.sunveil.net";
+    const vanityHost = `${serverKey}.${this.publicDomain}`;
+    const directHost = vanityHost;
     const directPort = Number(process.env.TUNNEL_PUBLIC_PORT) || port;
 
     const tunnel: ActiveTunnel = {
