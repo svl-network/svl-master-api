@@ -570,12 +570,23 @@ export class RelayServer {
       }
     });
 
+    // Keepalive Ping every 20 seconds to prevent Cloudflare/Railway idle timeout (100-120s)
+    const pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      } else {
+        clearInterval(pingTimer);
+      }
+    }, 20000);
+
     ws.on("close", () => {
+      clearInterval(pingTimer);
       console.log(`🛡️ [SVL-Tunnel] Bridge disconnected for '${serverKey}'.`);
       this.closeTunnel(serverKey);
     });
 
     ws.on("error", (err) => {
+      clearInterval(pingTimer);
       console.error(`🛡️ [SVL-Tunnel] WebSocket error on '${serverKey}':`, err.message);
       this.closeTunnel(serverKey);
     });
