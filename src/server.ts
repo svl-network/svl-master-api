@@ -63,7 +63,7 @@ if (!fs.existsSync(PUBLIC_DIR)) {
   fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 }
 
-const fastify = Fastify({ 
+const fastify = Fastify({
   logger: {
     transport: {
       target: "pino-pretty",
@@ -79,7 +79,7 @@ await fastify.register(cors, {
   origin: (origin, cb) => {
     // Allow non-browser requests (e.g. Minecraft plugins, launchers, curl)
     if (!origin) return cb(null, true);
-    
+
     const allowed = [
       "https://realms.sunveil.net",
       "https://dash.sunveil.net",
@@ -90,11 +90,11 @@ await fastify.register(cors, {
       "http://127.0.0.1:3000",
       "http://127.0.0.1:3001"
     ];
-    
+
     if (allowed.includes(origin) || origin.endsWith(".sunveil.net")) {
       return cb(null, true);
     }
-    
+
     // In production, reject unknown cross-origin web requests
     return cb(new Error("CORS origin not allowed"), false);
   },
@@ -191,20 +191,20 @@ fastify.addHook("preHandler", async (request, reply) => {
   // 1. Validate Secret Token
   if (!clientSecret || clientSecret !== CLIENT_SECRET) {
     fastify.log.warn(`Unauthorized access attempt from IP: ${request.ip}`);
-    return reply.status(403).send({ 
-      statusCode: 403, 
-      error: "Forbidden", 
-      message: "Invalid or missing client signature." 
+    return reply.status(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Invalid or missing client signature."
     });
   }
 
   // 2. Validate HWID Presence
   if (!hwid || typeof hwid !== "string" || hwid.length < 32) {
     fastify.log.warn(`Missing or invalid HWID from IP: ${request.ip}`);
-    return reply.status(400).send({ 
-      statusCode: 400, 
-      error: "Bad Request", 
-      message: "Hardware fingerprint verification failed." 
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Bad Request",
+      message: "Hardware fingerprint verification failed."
     });
   }
 });
@@ -249,9 +249,48 @@ export interface ServerPayload {
   links?: ServerLinks;
 }
 
-// In-Memory Stores
+// Persistent Server Stores
+const SERVERS_DB_FILE = path.resolve(APP_ROOT, "data", "servers.json");
 const serverStore = new Map<string, ServerPayload>();
 const serverOwnerStore = new Map<string, string>(); // serverKey -> tokenHash
+
+export const saveServersToDisk = () => {
+  try {
+    const dir = path.dirname(SERVERS_DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const data = {
+      servers: Array.from(serverStore.entries()),
+      serverOwners: Array.from(serverOwnerStore.entries()),
+      savedAt: Date.now()
+    };
+    fs.writeFileSync(SERVERS_DB_FILE, JSON.stringify(data, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save servers database to disk:", err);
+  }
+};
+
+export const loadServersFromDisk = () => {
+  try {
+    if (fs.existsSync(SERVERS_DB_FILE)) {
+      const raw = fs.readFileSync(SERVERS_DB_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.servers)) {
+        for (const [k, s] of parsed.servers) {
+          serverStore.set(k, s);
+        }
+      }
+      if (Array.isArray(parsed.serverOwners)) {
+        for (const [k, o] of parsed.serverOwners) {
+          serverOwnerStore.set(k, o);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load servers database from disk:", err);
+  }
+};
 
 // Sanitizer for untrusted string inputs
 const sanitizeString = (val: unknown, maxLen = 128): string => {
@@ -272,7 +311,7 @@ export function isValidToken(token: string): boolean {
   if (token === API_SECRET_KEY) return true;
   if (token === "svl_secret_token_2026") return true;
   if (process.env.MASTER_API_TOKEN && token === process.env.MASTER_API_TOKEN) return true;
-  
+
   // Accept any registered server owner licenseKey or serverKey from user database
   for (const user of userStore.values()) {
     if (user.licenseKey && user.licenseKey === token) {
@@ -323,7 +362,7 @@ fastify.get<{ Params: { sha256: string } }>("/api/v1/storage/check/:sha256", asy
   }
 
   const targetFile = path.resolve(DATA_MODS_DIR, `${sha256.toLowerCase()}.jar`);
-  
+
   // Path traversal sandbox check
   if (!targetFile.startsWith(DATA_MODS_DIR)) {
     return reply.status(400).send({ error: "Invalid file path traversal detected." });
@@ -393,9 +432,9 @@ fastify.post("/api/v1/storage/upload", {
     fs.closeSync(fd);
 
     const isZipOrJar = magicBuffer[0] === 0x50 &&
-                       magicBuffer[1] === 0x4B &&
-                       magicBuffer[2] === 0x03 &&
-                       magicBuffer[3] === 0x04;
+      magicBuffer[1] === 0x4B &&
+      magicBuffer[2] === 0x03 &&
+      magicBuffer[3] === 0x04;
 
     if (!isZipOrJar) {
       fs.unlinkSync(tempFilePath);
@@ -458,9 +497,9 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
   const payload = request.body;
 
   if (!payload || !payload.serverKey || !payload.ip || !payload.version) {
-    return reply.status(400).send({ 
-      error: "Bad Request", 
-      message: "Erforderliche Felder fehlen (serverKey, ip, version)." 
+    return reply.status(400).send({
+      error: "Bad Request",
+      message: "Erforderliche Felder fehlen (serverKey, ip, version)."
     });
   }
 
@@ -493,7 +532,7 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
   serverOwnerStore.set(rawServerKey, currentTokenHash);
 
   const rawMods = Array.isArray(payload.mods) ? payload.mods : [];
-  
+
   const mods: ModInfo[] = rawMods.map((m) => {
     const safeProjectId = sanitizeString(m.projectId, 64);
     const safeFileName = sanitizeString(m.fileName, 128);
@@ -514,32 +553,32 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     m.tier === "official" && m.downloadUrl && m.downloadUrl.startsWith("https://cdn.modrinth.com/")
   );
 
-    // Securely determine the authentic public IP of the Minecraft server from the network connection
-    let incomingIp = (request.headers["cf-connecting-ip"] as string)?.trim()
-      || (request.headers["x-real-ip"] as string)?.trim()
-      || (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
-      || request.ip
-      || request.socket.remoteAddress
-      || "";
+  // Securely determine the authentic public IP of the Minecraft server from the network connection
+  let incomingIp = (request.headers["cf-connecting-ip"] as string)?.trim()
+    || (request.headers["x-real-ip"] as string)?.trim()
+    || (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+    || request.ip
+    || request.socket.remoteAddress
+    || "";
 
-    if (incomingIp.startsWith("::ffff:")) {
-      incomingIp = incomingIp.substring(7);
-    }
+  if (incomingIp.startsWith("::ffff:")) {
+    incomingIp = incomingIp.substring(7);
+  }
 
-    const requestedIp = typeof payload.ip === "string" ? payload.ip.trim() : "";
-    // If a domain/hostname or public IP was explicitly provided (and isn't "auto"), preserve it; otherwise use detected incoming IP
-    let resolvedIp = incomingIp || "127.0.0.1";
-    if (requestedIp && requestedIp.toLowerCase() !== "auto" && requestedIp !== "127.0.0.1" && requestedIp !== "localhost") {
-      resolvedIp = sanitizeString(requestedIp, 64);
-    } else if (incomingIp) {
-      resolvedIp = incomingIp;
-    }
+  const requestedIp = typeof payload.ip === "string" ? payload.ip.trim() : "";
+  // If a domain/hostname or public IP was explicitly provided (and isn't "auto"), preserve it; otherwise use detected incoming IP
+  let resolvedIp = incomingIp || "127.0.0.1";
+  if (requestedIp && requestedIp.toLowerCase() !== "auto" && requestedIp !== "127.0.0.1" && requestedIp !== "localhost") {
+    resolvedIp = sanitizeString(requestedIp, 64);
+  } else if (incomingIp) {
+    resolvedIp = incomingIp;
+  }
 
-    const serverData: ServerPayload = {
-      serverKey: rawServerKey,
-      name: sanitizeString(payload.name, 64),
-      ip: resolvedIp,
-      port: Number(payload.port) || 25565,
+  const serverData: ServerPayload = {
+    serverKey: rawServerKey,
+    name: sanitizeString(payload.name, 64),
+    ip: resolvedIp,
+    port: Number(payload.port) || 25565,
     version: {
       minecraft: sanitizeString(payload.version?.minecraft, 32),
       loader: sanitizeString(payload.version?.loader, 32),
@@ -565,10 +604,11 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
   };
 
   serverStore.set(rawServerKey, serverData);
+  saveServersToDisk();
 
-  return { 
-    status: "ok", 
-    verified: isVerified, 
+  return {
+    status: "ok",
+    verified: isVerified,
     registeredMods: mods.length,
     officialMods: mods.filter(m => m.tier === "official").length,
     communityMods: mods.filter(m => m.tier === "community").length
@@ -830,7 +870,7 @@ fastify.get("/api/v1/user/dashboard", { preHandler: [requireUserAuth] }, async (
 const BOOST_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_SERVER_BOOSTS = 50;
 
-fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", { 
+fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", {
   preHandler: [requireUserAuth],
   config: {
     rateLimit: {
@@ -931,7 +971,7 @@ fastify.post<{ Body: { bannerUrl?: string; storeUrl?: string; discordInvite?: st
 const handleRegenerateKey = async (request: FastifyRequest, reply: FastifyReply) => {
   const user: User = (request as any).user;
   const oldKey = user.licenseKey;
-  
+
   user.licenseKey = generateLicenseKey();
 
   if (serverStore.has(oldKey)) {
@@ -965,95 +1005,102 @@ fastify.setNotFoundHandler((request, reply) => {
 
 // Seed Initial Boosted & Normal Servers for Real-time Verification
 const seedDemoServers = () => {
-  serverStore.set("svl_demo_realm", {
-    serverKey: "svl_demo_realm",
-    name: "Sunveil Modded Server",
-    ip: "java.sunveil.net",
-    port: 25565,
-    version: {
-      minecraft: "1.21.1",
-      loader: "forge",
-      loaderVersion: "61.2.1"
-    },
-    status: {
-      players: 0,
-      maxPlayers: 50,
-      motd: "Official High-Performance Modded Survival & Adventure Infrastructure."
-    },
-    verified: true,
-    boosts: 15,
-    sponsored: true,
-    bannerUrl: "https://raw.githubusercontent.com/PolyMC/PolyMC/develop/launcher/resources/multimc/scalable/multimc.svg",
-    links: {
-      store: "https://store.sunveil.net",
-      discord: "https://discord.gg/sunveil",
-      website: "https://sunveil.net"
-    },
-    mods: [
-      {
-        projectId: "MFgnFY8Z",
-        fileName: "3d_placeable_food-3.0.1-forge-1.21.11.jar",
-        sha256: "79e6776bb76619b6581353c4fef7357abc92ff6e0ba7a9c23b53e659578ef894",
-        downloadUrl: "https://cdn.modrinth.com/data/MFgnFY8Z/versions/8j7tivON/3d_placeable_food-3.0.1-forge-1.21.11.jar",
-        tier: "official"
+  if (!serverStore.has("svl_demo_realm")) {
+    serverStore.set("svl_demo_realm", {
+      serverKey: "svl_demo_realm",
+      name: "Sunveil Modded Server",
+      ip: "127.0.0.1",
+      port: 25565,
+      version: {
+        minecraft: "1.21.1",
+        loader: "forge",
+        loaderVersion: "61.2.1"
       },
-      {
-        projectId: "Lvv4SHrK",
-        fileName: "BetterThanMending-2.2.5.jar",
-        sha256: "9ba8a016b6365f31519185aeb1c95b8a70f764f95d09c5eceeb6c55428d866bd",
-        downloadUrl: "https://cdn.modrinth.com/data/Lvv4SHrK/versions/wHUk8xSy/BetterThanMending-2.2.5.jar",
-        tier: "official"
+      status: {
+        players: 0,
+        maxPlayers: 50,
+        motd: "Official High-Performance Modded Survival & Adventure Infrastructure."
       },
-      {
-        projectId: "dGVX5JbJ",
-        fileName: "bettervillage-forge-1.21.11-3.3.1.jar",
-        sha256: "06450f967db9aceb264abead49cf240ec92c4a9d1509cf9c9a7a8c70e5356330",
-        downloadUrl: "https://cdn.modrinth.com/data/dGVX5JbJ/versions/Pv5QcxqP/bettervillage-forge-1.21.11-3.3.1.jar",
-        tier: "official"
+      verified: true,
+      boosts: 15,
+      sponsored: true,
+      bannerUrl: "https://raw.githubusercontent.com/PolyMC/PolyMC/develop/launcher/resources/multimc/scalable/multimc.svg",
+      links: {
+        store: "https://store.sunveil.net",
+        discord: "https://discord.gg/sunveil",
+        website: "https://sunveil.net"
       },
-      {
-        projectId: "HXF82T3G",
-        fileName: "BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
-        sha256: "b7e2b7f9d27d118caebb297cbf2f0e696a0e5929828f4e12d8a5e1faf99ee766",
-        downloadUrl: "https://cdn.modrinth.com/data/HXF82T3G/versions/a3i8bZGT/BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
-        tier: "official"
-      }
-    ],
-    lastHeartbeat: 0
-  });
+      mods: [
+        {
+          projectId: "MFgnFY8Z",
+          fileName: "3d_placeable_food-3.0.1-forge-1.21.11.jar",
+          sha256: "79e6776bb76619b6581353c4fef7357abc92ff6e0ba7a9c23b53e659578ef894",
+          downloadUrl: "https://cdn.modrinth.com/data/MFgnFY8Z/versions/8j7tivON/3d_placeable_food-3.0.1-forge-1.21.11.jar",
+          tier: "official"
+        },
+        {
+          projectId: "Lvv4SHrK",
+          fileName: "BetterThanMending-2.2.5.jar",
+          sha256: "9ba8a016b6365f31519185aeb1c95b8a70f764f95d09c5eceeb6c55428d866bd",
+          downloadUrl: "https://cdn.modrinth.com/data/Lvv4SHrK/versions/wHUk8xSy/BetterThanMending-2.2.5.jar",
+          tier: "official"
+        },
+        {
+          projectId: "dGVX5JbJ",
+          fileName: "bettervillage-forge-1.21.11-3.3.1.jar",
+          sha256: "06450f967db9aceb264abead49cf240ec92c4a9d1509cf9c9a7a8c70e5356330",
+          downloadUrl: "https://cdn.modrinth.com/data/dGVX5JbJ/versions/Pv5QcxqP/bettervillage-forge-1.21.11-3.3.1.jar",
+          tier: "official"
+        },
+        {
+          projectId: "HXF82T3G",
+          fileName: "BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
+          sha256: "b7e2b7f9d27d118caebb297cbf2f0e696a0e5929828f4e12d8a5e1faf99ee766",
+          downloadUrl: "https://cdn.modrinth.com/data/HXF82T3G/versions/a3i8bZGT/BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
+          tier: "official"
+        }
+      ],
+      lastHeartbeat: 0
+    });
+  }
 
-  serverStore.set("svl_community_realm", {
-    serverKey: "svl_community_realm",
-    name: "Sunveil Vanilla+ Realm",
-    ip: "play.sunveil.net",
-    port: 25565,
-    version: {
-      minecraft: "1.21.1",
-      loader: "fabric",
-      loaderVersion: "0.16.0"
-    },
-    status: {
-      players: 0,
-      maxPlayers: 30,
-      motd: "A chill community survival realm with quality-of-life additions."
-    },
-    verified: false,
-    boosts: 0,
-    sponsored: false,
-    bannerUrl: null,
-    links: {
-      store: "",
-      discord: "https://discord.gg/sunveil",
-      website: ""
-    },
-    mods: [],
-    lastHeartbeat: 0
-  });
+  if (!serverStore.has("svl_community_realm")) {
+    serverStore.set("svl_community_realm", {
+      serverKey: "svl_community_realm",
+      name: "Sunveil Vanilla+ Realm",
+      ip: "play.sunveil.net",
+      port: 25565,
+      version: {
+        minecraft: "1.21.1",
+        loader: "fabric",
+        loaderVersion: "0.16.0"
+      },
+      status: {
+        players: 0,
+        maxPlayers: 30,
+        motd: "A chill community survival realm with quality-of-life additions."
+      },
+      verified: false,
+      boosts: 0,
+      sponsored: false,
+      bannerUrl: null,
+      links: {
+        store: "",
+        discord: "https://discord.gg/sunveil",
+        website: ""
+      },
+      mods: [],
+      lastHeartbeat: 0
+    });
+  }
+
+  saveServersToDisk();
 };
 
 const start = async () => {
   try {
     loadDatabaseFromDisk();
+    loadServersFromDisk();
     seedDemoServers();
     const port = Number(process.env.PORT) || 3001;
     const host = process.env.HOST || "0.0.0.0";

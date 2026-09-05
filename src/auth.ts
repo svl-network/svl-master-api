@@ -228,22 +228,21 @@ export const verifyJWT = (token: string): { sub: string; email: string; licenseK
 };
 
 /**
- * Initializes seed demo developer account if configured via environment variables
+ * Initializes seed demo developer account with predictable persistent credentials
  */
 export const seedDemoUser = () => {
-  const email = process.env.DEMO_USER_EMAIL;
-  const password = process.env.DEMO_USER_PASSWORD;
-  if (!email || !password) {
-    return;
-  }
+  const email = (process.env.DEMO_USER_EMAIL || "developer@sunveil.net").toLowerCase();
+  const password = process.env.DEMO_USER_PASSWORD || "SunveilDev2026!";
+  const defaultLicense = process.env.DEMO_USER_LICENSE || "SVL-FREE-7A9B-4D2E";
+
   if (!userStore.has(email)) {
     const { hash, salt } = hashPassword(password);
     const user: User = {
-      id: "usr_" + crypto.randomBytes(8).toString("hex"),
+      id: "usr_developer_sunveil",
       email,
       passwordHash: hash,
       salt,
-      licenseKey: process.env.DEMO_USER_LICENSE || "SVL-FREE-7A9B-4D2E",
+      licenseKey: defaultLicense,
       serverKey: "svl_demo_realm",
       createdAt: Date.now() - 30 * 24 * 3600 * 1000,
       boosts: 15,
