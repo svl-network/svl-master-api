@@ -499,7 +499,7 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
   if (!payload || !payload.serverKey || !payload.ip || !payload.version) {
     return reply.status(400).send({
       error: "Bad Request",
-      message: "Erforderliche Felder fehlen (serverKey, ip, version)."
+      message: "Required fields missing (serverKey, ip, version)."
     });
   }
 
@@ -670,7 +670,7 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
   const safeServerKey = sanitizeString(request.params.serverKey, 64);
   const srv = serverStore.get(safeServerKey);
   if (!srv) {
-    return reply.status(404).send({ error: "Server nicht gefunden oder offline." });
+    return reply.status(404).send({ error: "Server not found or offline." });
   }
 
   const tunnel = relayServer.getTunnel(srv.serverKey);
@@ -894,7 +894,7 @@ fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", {
     return reply.status(429).send({
       success: false,
       error: "Cooldown active",
-      message: `Cooldown aktiv: Du kannst nur alle 24 Stunden boosten. Nächster Boost in ${timeString}.`,
+      message: `Cooldown active: You can only boost once every 24 hours. Next boost in ${timeString}.`,
       remainingMs,
       nextBoostAt: user.lastBoostAt + BOOST_COOLDOWN_MS
     });
@@ -905,7 +905,7 @@ fastify.post<{ Body: { amount?: number } }>("/api/v1/user/boost", {
     return reply.status(400).send({
       success: false,
       error: "Max boosts reached",
-      message: `Maximales Boost-Limit (${MAX_SERVER_BOOSTS} Boosts) für diesen Server bereits erreicht.`
+      message: `Maximum boost limit (${MAX_SERVER_BOOSTS} boosts) reached for this server.`
     });
   }
 
@@ -1117,7 +1117,7 @@ const start = async () => {
 
     await fastify.listen({ port: httpPort, host });
     relayServer.attach(fastify.server);
-    console.log(`\n🚀 SVL Master-API & Realms Portal läuft sicher auf http://localhost:${httpPort}\n`);
+    console.log(`\n🚀 SVL Master-API & Realms Portal running securely on http://localhost:${httpPort}\n`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

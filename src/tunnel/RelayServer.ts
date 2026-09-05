@@ -169,7 +169,7 @@ function createStatusResponsePacket(hostname: string): Buffer {
   const statusPayload = JSON.stringify({
     version: { name: "Sunveil Relay", protocol: 767 },
     players: { max: 0, online: 0 },
-    description: { text: `§eSunveil Realm §7(${hostname}) §c[Offline]\n§7Starte deinen Server mit dem SVL-Bridge Plugin.` }
+    description: { text: `§eSunveil Realm §7(${hostname}) §c[Offline]\n§7Start your server with the SVL-Bridge plugin.` }
   });
   const jsonBuf = Buffer.from(statusPayload, "utf8");
   const jsonLenBuf = writeVarInt(jsonBuf.length);
@@ -262,7 +262,7 @@ export class RelayServer {
             clientSocket.write(createStatusResponsePacket(handshake.hostname || "unknown"));
           } else {
             // Login Disconnect response
-            clientSocket.write(createDisconnectPacket(`Realm '${handshake.hostname}' ist offline oder existiert nicht.`));
+            clientSocket.write(createDisconnectPacket(`Realm '${handshake.hostname}' is offline or does not exist.`));
           }
           setTimeout(() => clientSocket.destroy(), 500);
           return;
@@ -287,17 +287,22 @@ export class RelayServer {
   }
 
   /**
-   * Resolves an ActiveTunnel by hostname (e.g. "smp.realms.sunveil.net", "realm_abc.sunveil.net", or "smp")
+   * Resolves an ActiveTunnel by hostname (e.g. "smp.realms.sunveil.net", "realm_abc.sunveil.net", or direct proxy host)
    */
   private findTunnelByHost(hostname: string): ActiveTunnel | undefined {
-    if (!hostname) return undefined;
+    if (!hostname) {
+      if (this.activeTunnels.size === 1) {
+        return this.activeTunnels.values().next().value;
+      }
+      return undefined;
+    }
 
     // 1. Direct match on serverKey
     if (this.activeTunnels.has(hostname)) {
       return this.activeTunnels.get(hostname);
     }
 
-    // 2. Extract subdomain (e.g. "smp" from "smp.realms.sunveil.net" or "smp.sunveil.net")
+    // 2. Extract subdomain (e.g. "smp" from "smp.realms.sunveil.net" or "free-demo-server.realms.sunveil.net")
     const parts = hostname.split(".");
     if (parts.length > 0 && parts[0]) {
       const subdomain = parts[0];
@@ -312,6 +317,24 @@ export class RelayServer {
       const cleanKey = key.replace(/[^a-z0-9_-]/gi, "").toLowerCase();
       if (cleanHost === cleanKey || cleanHost.startsWith(cleanKey)) {
         return tunnel;
+      }
+    }
+
+    // 4. If connecting via the main public proxy host (e.g. hayabusa.proxy.rlwy.net, realms.sunveil.net, localhost)
+    const directHost = (process.env.TUNNEL_PUBLIC_HOST || "").toLowerCase();
+    const publicDomain = this.publicDomain.toLowerCase();
+    const lowerHost = hostname.toLowerCase();
+
+    if (
+      lowerHost === directHost ||
+      lowerHost === publicDomain ||
+      lowerHost === "localhost" ||
+      lowerHost === "127.0.0.1" ||
+      lowerHost.includes("proxy.rlwy.net") ||
+      this.activeTunnels.size === 1
+    ) {
+      if (this.activeTunnels.size > 0) {
+        return this.activeTunnels.values().next().value;
       }
     }
 
