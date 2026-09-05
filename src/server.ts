@@ -121,10 +121,56 @@ await fastify.register(helmet, {
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://pagead2.googlesyndication.com",
+        "https://*.googlesyndication.com",
+        "https://*.google.com",
+        "https://*.doubleclick.net",
+        "https://*.google-analytics.com",
+        "https://*.googletagmanager.com",
+        "https://adservice.google.com"
+      ],
+      scriptSrcElem: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://pagead2.googlesyndication.com",
+        "https://*.googlesyndication.com",
+        "https://*.google.com",
+        "https://*.doubleclick.net",
+        "https://*.google-analytics.com",
+        "https://*.googletagmanager.com",
+        "https://adservice.google.com"
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://fonts.googleapis.com",
+        "https://*.google.com",
+        "https://*.googlesyndication.com"
+      ],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc: ["'self'", "data:", "https:", "http:", "https://raw.githubusercontent.com"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "https:",
+        "http:",
+        "https://mc-heads.net",
+        "https://raw.githubusercontent.com",
+        "https://*.googlesyndication.com",
+        "https://*.google.com",
+        "https://*.doubleclick.net"
+      ],
+      frameSrc: [
+        "'self'",
+        "https://googleads.g.doubleclick.net",
+        "https://*.googlesyndication.com",
+        "https://*.google.com",
+        "https://*.doubleclick.net",
+        "https://sunveilsmp.tebex.io"
+      ],
       connectSrc: [
         "'self'",
         "https://realms.sunveil.net",
@@ -132,6 +178,10 @@ await fastify.register(helmet, {
         "https://api.sunveil.net",
         "https://sunveil.net",
         "https://www.sunveil.net",
+        "https://*.googlesyndication.com",
+        "https://*.google.com",
+        "https://*.doubleclick.net",
+        "https://*.google-analytics.com",
         "http://localhost:3001",
         "http://127.0.0.1:3001"
       ]
