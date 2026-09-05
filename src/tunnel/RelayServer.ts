@@ -287,50 +287,48 @@ export class RelayServer {
   }
 
   /**
-   * Resolves an ActiveTunnel by hostname (e.g. "smp.realms.sunveil.net", "realm_abc.sunveil.net", or direct proxy host)
+   * Resolves an ActiveTunnel by hostname (e.g. "SVL-FREE-7076-4DB4.realms.sunveil.net", "smp.realms.sunveil.net", or direct proxy host)
    */
   private findTunnelByHost(hostname: string): ActiveTunnel | undefined {
     if (!hostname) {
-      if (this.activeTunnels.size === 1) {
+      if (this.activeTunnels.size > 0) {
         return this.activeTunnels.values().next().value;
       }
       return undefined;
     }
 
-    // 1. Direct match on serverKey
-    if (this.activeTunnels.has(hostname)) {
-      return this.activeTunnels.get(hostname);
-    }
+    const lowerHost = hostname.toLowerCase().trim();
+    const subdomain = lowerHost.split(".")[0] || "";
 
-    // 2. Extract subdomain (e.g. "smp" from "smp.realms.sunveil.net" or "free-demo-server.realms.sunveil.net")
-    const parts = hostname.split(".");
-    if (parts.length > 0 && parts[0]) {
-      const subdomain = parts[0];
-      if (this.activeTunnels.has(subdomain)) {
-        return this.activeTunnels.get(subdomain);
-      }
-    }
-
-    // 3. Normalized search
-    const cleanHost = hostname.replace(/[^a-z0-9_-]/gi, "").toLowerCase();
+    // 1. Direct case-insensitive match on serverKey or subdomain
     for (const [key, tunnel] of this.activeTunnels.entries()) {
-      const cleanKey = key.replace(/[^a-z0-9_-]/gi, "").toLowerCase();
-      if (cleanHost === cleanKey || cleanHost.startsWith(cleanKey)) {
+      const lowerKey = key.toLowerCase();
+      if (lowerKey === lowerHost || lowerKey === subdomain) {
         return tunnel;
       }
     }
 
-    // 4. If connecting via the main public proxy host (e.g. hayabusa.proxy.rlwy.net, realms.sunveil.net, localhost)
+    // 2. Normalized search without hyphens/underscores
+    const cleanHost = lowerHost.replace(/[^a-z0-9]/gi, "");
+    const cleanSubdomain = subdomain.replace(/[^a-z0-9]/gi, "");
+    for (const [key, tunnel] of this.activeTunnels.entries()) {
+      const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/gi, "");
+      if (cleanKey === cleanSubdomain || cleanHost.startsWith(cleanKey)) {
+        return tunnel;
+      }
+    }
+
+    // 3. Fallback for public domain, proxy host, localhost, or if only 1 tunnel is connected
     const directHost = (process.env.TUNNEL_PUBLIC_HOST || "").toLowerCase();
     const publicDomain = this.publicDomain.toLowerCase();
-    const lowerHost = hostname.toLowerCase();
 
     if (
       lowerHost === directHost ||
       lowerHost === publicDomain ||
+      lowerHost.endsWith(publicDomain) ||
+      lowerHost.includes("proxy.rlwy.net") ||
       lowerHost === "localhost" ||
       lowerHost === "127.0.0.1" ||
-      lowerHost.includes("proxy.rlwy.net") ||
       this.activeTunnels.size === 1
     ) {
       if (this.activeTunnels.size > 0) {
