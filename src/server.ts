@@ -2292,7 +2292,11 @@ const start = async () => {
     loadServersFromDisk();
     seedDemoServers();
 
-    const httpPort = Number(process.env.PORT) || 8080;
+    // Ensure HTTP server runs on port 8080 (or HTTP_PORT), keeping 25565 dedicated for Minecraft TCP SNI relay
+    let httpPort = Number(process.env.HTTP_PORT) || 8080;
+    if (process.env.PORT && process.env.PORT !== "25565") {
+      httpPort = Number(process.env.PORT);
+    }
     const host = process.env.HOST || "0.0.0.0";
 
     await fastify.listen({ port: httpPort, host });
