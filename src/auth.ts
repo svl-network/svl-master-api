@@ -55,8 +55,12 @@ const DB_FILE = getDbPath();
 const LICENSES_DB_FILE = getLicensesDbPath();
 const AUDIT_LOG_FILE = getAuditLogDbPath();
 
+// Dynamic fallback secrets generated at boot if not supplied via environment variables
+const dynamicJwtSecret = crypto.randomBytes(32).toString("hex");
+let dynamicAdminSecret: string | null = null;
+
 export const getJwtSecret = (): string => {
-  return process.env.JWT_SECRET || process.env.API_SECRET_KEY || "svl_jwt_realm_secret_2026_supersecure";
+  return process.env.JWT_SECRET || process.env.API_SECRET_KEY || dynamicJwtSecret;
 };
 
 export type TrustLevel = "TRUSTED" | "NORMAL" | "SUSPICIOUS" | "QUARANTINED" | "BANNED";
@@ -519,6 +523,18 @@ export const verifyPassword = (password: string, storedHash: string, salt: strin
   }
 };
 
+export const getBootstrapAdminSecret = (): string => {
+  if (process.env.ADMIN_SECRET_KEY && process.env.ADMIN_SECRET_KEY.trim().length > 0) {
+    return process.env.ADMIN_SECRET_KEY.trim();
+  }
+  if (!dynamicAdminSecret) {
+    dynamicAdminSecret = crypto.randomBytes(24).toString("hex");
+    console.warn(`\n⚠️  [SECURITY WARNING] No ADMIN_SECRET_KEY environment variable set in .env / platform!`);
+    console.warn(`🔑 [SECURITY] Generated ephemeral admin bootstrap secret: ${dynamicAdminSecret}\n`);
+  }
+  return dynamicAdminSecret;
+};
+
 /**
  * Timing-safe admin token verifier against environment master secrets
  */
@@ -529,9 +545,12 @@ export const verifyAdminSecret = (providedSecret: string): boolean => {
     process.env.ADMIN_SECRET_KEY,
     process.env.MASTER_API_TOKEN,
     process.env.API_SECRET_KEY,
-    "svl_secret_token_2026",
-    "svl_admin_super_secret_2026"
+    dynamicAdminSecret
   ].filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+
+  if (validSecrets.length === 0) {
+    validSecrets.push(getBootstrapAdminSecret());
+  }
 
   for (const valid of validSecrets) {
     const a = Buffer.from(crypto.createHash("sha256").update(providedSecret.trim()).digest("hex"));
@@ -670,9 +689,12 @@ export const verifyJWT = (token: string): { sub: string; email: string; licenseK
  * Initializes seed demo developer account with predictable persistent credentials
  */
 export const seedDemoUser = () => {
+  if (process.env.SEED_DEMO_USER !== "true" && !process.env.DEMO_USER_PASSWORD) {
+    return;
+  }
   const email = (process.env.DEMO_USER_EMAIL || "developer@sunveil.net").toLowerCase();
-  const password = process.env.DEMO_USER_PASSWORD || "SunveilDev2026!";
-  const defaultLicense = process.env.DEMO_USER_LICENSE || "SVL-FREE-7A9B-4D2E";
+  const password = process.env.DEMO_USER_PASSWORD || crypto.randomBytes(16).toString("hex");
+  const defaultLicense = process.env.DEMO_USER_LICENSE || generateLicenseKey("SPONSOR");
 
   if (!userStore.has(email)) {
     const { hash, salt } = hashPassword(password);

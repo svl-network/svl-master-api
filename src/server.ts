@@ -63,8 +63,9 @@ import {
 } from "./auth.js";
 import { relayServer } from "./tunnel/RelayServer.js";
 
-const API_SECRET_KEY = process.env.API_SECRET_KEY || process.env.MASTER_API_TOKEN || "svl_secret_token_2026";
-const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || "svl_prod_sec_99a8b7c6d5";
+const API_SECRET_KEY = process.env.API_SECRET_KEY || process.env.MASTER_API_TOKEN || crypto.randomBytes(32).toString("hex");
+const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || crypto.randomBytes(32).toString("hex");
+const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(32).toString("hex");
 const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 150) * 1024 * 1024;
 const DATA_MODS_DIR = path.resolve(getDataDir(), "mods");
 const PUBLIC_DIR = fs.existsSync(path.resolve(process.cwd(), "public"))
@@ -92,7 +93,7 @@ const fastify = Fastify({
 
 // Register Plugins BEFORE routes
 await fastify.register(cookie, {
-  secret: process.env.COOKIE_SECRET || "svl_secure_cookie_secret_2026_x89"
+  secret: COOKIE_SECRET
 });
 
 await fastify.register(cors, {
@@ -399,7 +400,6 @@ const hashToken = (token: string): string => {
 export function isValidToken(token: string): boolean {
   if (!token) return false;
   if (token === API_SECRET_KEY) return true;
-  if (token === "svl_secret_token_2026") return true;
   if (process.env.MASTER_API_TOKEN && token === process.env.MASTER_API_TOKEN) return true;
 
   // Check user accounts and their multi-server keys
@@ -444,8 +444,7 @@ export function validateSubdomainOrKey(name: string): { valid: boolean; error?: 
   const sensitiveTokens = [
     (process.env.API_SECRET_KEY || "").toLowerCase(),
     (process.env.MASTER_API_TOKEN || "").toLowerCase(),
-    (process.env.JWT_SECRET || "").toLowerCase(),
-    "svl_secret_token_2026"
+    (process.env.JWT_SECRET || "").toLowerCase()
   ].filter(t => t.length > 0);
 
   for (const secret of sensitiveTokens) {
