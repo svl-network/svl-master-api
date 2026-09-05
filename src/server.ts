@@ -1152,15 +1152,25 @@ const handleRegenerateKey = async (request: FastifyRequest, reply: FastifyReply)
 fastify.post("/api/v1/user/license/regenerate", { preHandler: [requireUserAuth] }, handleRegenerateKey);
 fastify.post("/api/v1/user/regenerate-key", { preHandler: [requireUserAuth] }, handleRegenerateKey);
 
-// Single Page Application route fallback for /dashboard, /login
+// Single Page Application & Custom 404 Page Handler
 fastify.setNotFoundHandler((request, reply) => {
   if (request.url.startsWith("/api/")) {
     return reply.status(404).send({ error: "Not Found", message: "API endpoint not found" });
   }
-  const indexPath = path.join(PUBLIC_DIR, "index.html");
-  if (fs.existsSync(indexPath)) {
-    return reply.type("text/html").send(fs.readFileSync(indexPath, "utf8"));
+
+  const cleanPath = request.url.split("?")[0] || "";
+  if (cleanPath === "/dashboard" || cleanPath === "/login" || cleanPath === "/register" || cleanPath === "/servers" || cleanPath === "/connect") {
+    const indexPath = path.join(PUBLIC_DIR, "index.html");
+    if (fs.existsSync(indexPath)) {
+      return reply.type("text/html").send(fs.readFileSync(indexPath, "utf8"));
+    }
   }
+
+  const notFoundPath = path.join(PUBLIC_DIR, "404.html");
+  if (fs.existsSync(notFoundPath)) {
+    return reply.status(404).type("text/html").send(fs.readFileSync(notFoundPath, "utf8"));
+  }
+
   return reply.status(404).send("Page not found");
 });
 
