@@ -342,6 +342,12 @@ export class RelayServer {
       });
     });
 
+    const httpPort = Number(process.env.PORT) || 8080;
+    if (this.centralPort === httpPort) {
+      this.centralPort = (httpPort === 25565) ? 25566 : 25565;
+      console.log(`ℹ️ [SVL-Relay] TUNNEL_MAIN_PORT matches HTTP PORT (${httpPort}). Routing Minecraft TCP relay to port :${this.centralPort}.`);
+    }
+
     this.centralServer.listen(this.centralPort, "0.0.0.0", () => {
       console.log(`🌐 [SVL-Relay] Central Hostname/SNI Router active on port :${this.centralPort} (Unlimited Realms support)`);
     });
