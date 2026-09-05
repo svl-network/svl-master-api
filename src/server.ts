@@ -1183,11 +1183,14 @@ const handleTebexWebhook = async (request: FastifyRequest, reply: FastifyReply) 
 
     for (const prod of products) {
       const prodName = (prod.name || prod.package_name || "").toLowerCase();
+      const customData = (prod.custom_data || prod.custom || "").toString().toLowerCase();
       if (
         prodName.includes("boost") ||
         prodName.includes("sponsor") ||
         prodName.includes("featured") ||
-        prodName.includes("server")
+        prodName.includes("server") ||
+        customData.includes("boost") ||
+        customData.includes("server_boost")
       ) {
         isBoostOrSponsor = true;
         boostBonus += 25 * (prod.quantity || 1);
