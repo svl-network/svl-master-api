@@ -485,10 +485,11 @@ export class RelayServer {
     });
 
     const directHost = process.env.TUNNEL_PUBLIC_HOST || this.publicDomain || "realms.sunveil.net";
+    const directPort = Number(process.env.TUNNEL_PUBLIC_PORT) || port;
 
     const tunnel: ActiveTunnel = {
       serverKey,
-      assignedPort: port,
+      assignedPort: directPort,
       publicHost: directHost,
       connectedAt: Date.now(),
       bytesReceived: 0,
@@ -501,13 +502,16 @@ export class RelayServer {
 
     this.activeTunnels.set(serverKey, tunnel);
     this.portToTunnel.set(port, serverKey);
+    if (directPort !== port) {
+      this.portToTunnel.set(directPort, serverKey);
+    }
 
     // Send Tunnel Registration Confirmation to Bridge
     const welcomeMsg = JSON.stringify({
       type: "TUNNEL_READY",
       serverKey,
       publicHost: directHost,
-      publicPort: port,
+      publicPort: directPort,
       fallbackPort: port,
       timestamp: Date.now()
     });

@@ -22,7 +22,7 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const APP_ROOT = path.resolve(__dirname, "..");
+const APP_ROOT = process.env.APP_ROOT || (fs.existsSync(path.resolve(process.cwd(), "package.json")) ? process.cwd() : path.resolve(__dirname, ".."));
 
 const getDbPath = (): string => {
   const localDataDir = path.resolve(APP_ROOT, "data");

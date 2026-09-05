@@ -28,7 +28,7 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const APP_ROOT = path.resolve(__dirname, "..");
+const APP_ROOT = process.env.APP_ROOT || (fs.existsSync(path.resolve(process.cwd(), "package.json")) ? process.cwd() : path.resolve(__dirname, ".."));
 
 import {
   type User,
@@ -730,7 +730,9 @@ const requireUserAuth = async (request: FastifyRequest, reply: FastifyReply) => 
     });
   }
 
-  const user = userIdStore.get(payload.sub) || userStore.get(payload.email);
+  const user =
+    (payload.sub ? userIdStore.get(payload.sub) : undefined) ||
+    (payload.email ? userStore.get(payload.email.trim().toLowerCase()) : undefined);
   if (!user) {
     return reply.status(404).send({
       statusCode: 404,
