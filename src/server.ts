@@ -228,6 +228,7 @@ export interface ServerPayload {
   name: string;
   ip: string;
   port: number;
+  region?: string;
   version: {
     minecraft: string;
     loader: string;
@@ -644,11 +645,14 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     resolvedIp = incomingIp;
   }
 
+  const detectedCountry = (request.headers["cf-ipcountry"] as string)?.trim() || "EU";
+
   const serverData: ServerPayload = {
     serverKey: rawServerKey,
     name: sanitizeString(payload.name, 64),
     ip: resolvedIp,
     port: Number(payload.port) || 25565,
+    region: detectedCountry,
     version: {
       minecraft: sanitizeString(payload.version?.minecraft, 32),
       loader: sanitizeString(payload.version?.loader, 32),
