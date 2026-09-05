@@ -815,14 +815,32 @@ const requireUserAuth = async (request: FastifyRequest, reply: FastifyReply) => 
 };
 
 // 9. Auth Register
-fastify.post<{ Body: { email?: string; password?: string } }>("/api/v1/auth/register", async (request, reply) => {
-  const { email, password } = request.body || {};
+fastify.post<{ Body: { email?: string; password?: string; tosAgreed?: boolean; tosPhrase?: string } }>("/api/v1/auth/register", async (request, reply) => {
+  const { email, password, tosAgreed, tosPhrase } = request.body || {};
   if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
     return reply.status(400).send({ statusCode: 400, error: "Bad Request", message: "Please provide a valid email address." });
   }
 
   if (!password || typeof password !== "string" || password.length < 8) {
     return reply.status(400).send({ statusCode: 400, error: "Bad Request", message: "Password must be at least 8 characters long." });
+  }
+
+  // Anti-Bot & Anti-Malware Policy Verification
+  if (!tosAgreed) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "TOS Agreement Required",
+      message: "You must agree to the Sunveil Network Terms of Service and Anti-Malware Policy."
+    });
+  }
+
+  const cleanPhrase = (tosPhrase || "").toLowerCase().replace(/[^a-z]/g, " ").trim();
+  if (!cleanPhrase.includes("agree") || !cleanPhrase.includes("malware") || !cleanPhrase.includes("harm")) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Anti-Bot Verification Failed",
+      message: "Please type the required Anti-Malware & Terms of Service confirmation phrase exactly."
+    });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -834,6 +852,8 @@ fastify.post<{ Body: { email?: string; password?: string } }>("/api/v1/auth/regi
   const licenseKey = generateLicenseKey();
   const serverKey = "realm_" + crypto.randomBytes(6).toString("hex");
 
+  const incomingIp = (request.headers["cf-connecting-ip"] as string)?.trim() || request.ip || "";
+
   const newUser: User = {
     id: "usr_" + crypto.randomBytes(8).toString("hex"),
     email: normalizedEmail,
@@ -844,7 +864,10 @@ fastify.post<{ Body: { email?: string; password?: string } }>("/api/v1/auth/regi
     createdAt: Date.now(),
     boosts: 0,
     sponsored: false,
-    links: { store: "", discord: "", website: "" }
+    links: { store: "", discord: "", website: "" },
+    tosAgreedAt: Date.now(),
+    tosAgreedIp: incomingIp,
+    antiMalwareAffirmed: true
   };
 
   userStore.set(normalizedEmail, newUser);
@@ -860,7 +883,8 @@ fastify.post<{ Body: { email?: string; password?: string } }>("/api/v1/auth/regi
       id: newUser.id,
       email: newUser.email,
       licenseKey: newUser.licenseKey,
-      createdAt: newUser.createdAt
+      createdAt: newUser.createdAt,
+      antiMalwareAffirmed: true
     }
   };
 });

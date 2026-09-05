@@ -111,6 +111,8 @@ document.addEventListener("DOMContentLoaded", () => {
     authForm.addEventListener("submit", handleAuthSubmit);
   }
 
+  setupTosPhraseListener();
+
   const settingsForm = document.getElementById("settings-form");
   if (settingsForm) {
     settingsForm.addEventListener("submit", handleSettingsSubmit);
@@ -211,6 +213,7 @@ function switchAuthTab(tab) {
   const loginTab = document.getElementById("tab-login");
   const registerTab = document.getElementById("tab-register");
   const confirmGroup = document.getElementById("register-confirm-group");
+  const tosGroup = document.getElementById("register-tos-group");
   const submitText = document.getElementById("btn-auth-text");
   const alertBox = document.getElementById("auth-alert");
 
@@ -220,15 +223,38 @@ function switchAuthTab(tab) {
     if (loginTab) loginTab.classList.add("active");
     if (registerTab) registerTab.classList.remove("active");
     if (confirmGroup) confirmGroup.classList.add("hidden");
+    if (tosGroup) tosGroup.classList.add("hidden");
     if (submitText) submitText.innerText = "Sign in";
   } else {
     if (registerTab) registerTab.classList.add("active");
     if (loginTab) loginTab.classList.remove("active");
     if (confirmGroup) confirmGroup.classList.remove("hidden");
-    if (submitText) submitText.innerText = "Create account";
+    if (tosGroup) tosGroup.classList.remove("hidden");
+    if (submitText) submitText.innerText = "Accept TOS & Create Account";
   }
 }
 
+// Live Anti-Bot Phrase Verification Handler
+function setupTosPhraseListener() {
+  const phraseInput = document.getElementById("input-tos-phrase");
+  const phraseStatus = document.getElementById("tos-phrase-status");
+  const targetPhrase = "I agree to the Terms of Service and affirm that I will not host malware or harm connected players.";
+
+  if (!phraseInput || !phraseStatus) return;
+
+  phraseInput.addEventListener("input", () => {
+    const val = phraseInput.value.trim().toLowerCase().replace(/[^a-z]/g, " ");
+    const target = targetPhrase.toLowerCase().replace(/[^a-z]/g, " ");
+
+    if (val.includes("agree") && val.includes("malware") && val.includes("harm")) {
+      phraseStatus.innerHTML = '<span style="color: #4ade80; font-weight: 600;">✅ Verified: Anti-Malware Pledge confirmed!</span>';
+      phraseInput.style.borderColor = "#22c55e";
+    } else {
+      phraseStatus.innerHTML = '<span style="color: var(--text-muted, #71717a);">✍️ Type the exact sentence above to confirm.</span>';
+      phraseInput.style.borderColor = "";
+    }
+  });
+}
 
 // Handle Login / Registration (Live API Call)
 async function handleAuthSubmit(event) {
@@ -238,10 +264,14 @@ async function handleAuthSubmit(event) {
   const emailInput = document.getElementById("input-email");
   const passwordInput = document.getElementById("input-password");
   const passwordConfirmInput = document.getElementById("input-password-confirm");
+  const tosAgreeInput = document.getElementById("input-tos-agree");
+  const tosPhraseInput = document.getElementById("input-tos-phrase");
 
   const email = emailInput ? emailInput.value.trim() : "";
   const password = passwordInput ? passwordInput.value : "";
   const passwordConfirm = passwordConfirmInput ? passwordConfirmInput.value : "";
+  const tosAgreed = tosAgreeInput ? tosAgreeInput.checked : false;
+  const tosPhrase = tosPhraseInput ? tosPhraseInput.value.trim() : "";
 
   if (alertBox) {
     alertBox.classList.add("hidden");
@@ -257,6 +287,25 @@ async function handleAuthSubmit(event) {
       }
       return;
     }
+
+    if (!tosAgreed) {
+      if (alertBox) {
+        alertBox.innerText = "You must check the box to agree to the Terms of Service & Anti-Malware Policy.";
+        alertBox.className = "alert-box alert-error";
+        alertBox.classList.remove("hidden");
+      }
+      return;
+    }
+
+    const cleanPhrase = tosPhrase.toLowerCase().replace(/[^a-z]/g, " ");
+    if (!cleanPhrase.includes("agree") || !cleanPhrase.includes("malware") || !cleanPhrase.includes("harm")) {
+      if (alertBox) {
+        alertBox.innerText = "Please type the Anti-Malware pledge sentence in full to verify.";
+        alertBox.className = "alert-box alert-error";
+        alertBox.classList.remove("hidden");
+      }
+      return;
+    }
   }
 
   if (submitBtn) {
@@ -265,12 +314,15 @@ async function handleAuthSubmit(event) {
   }
 
   const endpoint = currentAuthTab === "register" ? "/api/v1/auth/register" : "/api/v1/auth/login";
+  const reqBody = currentAuthTab === "register"
+    ? { email, password, tosAgreed, tosPhrase }
+    : { email, password };
 
   try {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify(reqBody)
     });
 
     const data = await res.json();
@@ -281,13 +333,23 @@ async function handleAuthSubmit(event) {
 
     setAuthToken(data.token);
     closeAuthModal();
-    showToast(currentAuthTab === "register" ? "Account created successfully." : "Signed in.");
+    showToast(currentAuthTab === "register" ? "Account created successfully with verified security pledge." : "Signed in.");
     
     await checkSessionState();
     openDashboardModal();
   } catch (err) {
     if (alertBox) {
       alertBox.innerText = err.message || "An unexpected error occurred.";
+      alertBox.className = "alert-box alert-error";
+      alertBox.classList.remove("hidden");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = "1";
+    }
+  }
+}
       alertBox.className = "alert-box alert-error";
       alertBox.classList.remove("hidden");
     }

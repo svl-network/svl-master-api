@@ -495,7 +495,50 @@
             <input type="password" id="input-password-confirm" class="form-input" placeholder="••••••••••••" autocomplete="new-password">
           </div>
 
-          <button type="submit" id="btn-auth-submit" class="btn btn-primary btn-block">
+          <!-- Anti-Malware & Terms of Service Pledge (Register Tab Only) -->
+          <div id="register-tos-group" class="form-field hidden" style="margin-top: 14px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding-top: 14px;">
+            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+              <div style="font-weight: 700; color: #ef4444; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                <span>🛡️ Anti-Malware &amp; Player Protection Policy</span>
+              </div>
+              <p style="font-size: 12px; line-height: 1.4; color: var(--text-secondary, #a1a1aa); margin: 0;">
+                By generating a server key on Sunveil Network, you explicitly agree that your server and connected tunnel will NOT distribute malware, RATs, crashers, exploits, or malicious payloads to connected players.
+              </p>
+            </div>
+
+            <!-- Scrollable Terms of Service Container -->
+            <label class="form-label" style="font-size: 12px;">Terms of Service &amp; Acceptable Use</label>
+            <div style="max-height: 110px; overflow-y: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 6px; padding: 10px; font-size: 11px; line-height: 1.45; color: var(--text-muted, #71717a); margin-bottom: 12px;">
+              <strong>1. Prohibited Content:</strong> Hosting, distributing, or transmitting viruses, trojans, ransomware, denial-of-service tools, or compromised Minecraft mods/plugins is strictly forbidden.<br><br>
+              <strong>2. Player Safety:</strong> You must not attempt to compromise the security, integrity, or hardware of any client connecting to your realm.<br><br>
+              <strong>3. Zero-Tolerance Enforcement:</strong> Violations will result in immediate permanent key revocation, hardware fingerprint blacklisting, and reporting to relevant cyber authorities.<br><br>
+              <strong>4. Privacy &amp; Data:</strong> Encrypted tunnels are provided for genuine Minecraft gameplay and modded server networking only.
+            </div>
+
+            <!-- TOS Checkbox -->
+            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px;">
+              <input type="checkbox" id="input-tos-agree" style="margin-top: 3px; cursor: pointer;">
+              <label for="input-tos-agree" style="font-size: 12px; cursor: pointer; color: var(--text-primary, #f4f4f5); line-height: 1.35;">
+                I agree to the <strong>Terms of Service</strong> and pledge to maintain safe infrastructure.
+              </label>
+            </div>
+
+            <!-- Anti-Bot Verification Phrase Challenge -->
+            <div class="form-field" style="margin-bottom: 0;">
+              <label for="input-tos-phrase" class="form-label" style="font-size: 12px;">
+                Anti-Bot Verification: Type the pledge below to confirm
+              </label>
+              <div id="tos-target-phrase" style="background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 11px; color: #38bdf8; margin-bottom: 8px; user-select: text;">
+                I agree to the Terms of Service and affirm that I will not host malware or harm connected players.
+              </div>
+              <input type="text" id="input-tos-phrase" class="form-input" placeholder="Type the pledge phrase exactly as shown above..." autocomplete="off" style="font-size: 12px;">
+              <span id="tos-phrase-status" style="font-size: 11px; margin-top: 4px; display: block; color: var(--text-muted, #71717a);">
+                ✍️ Type the exact sentence above to enable registration.
+              </span>
+            </div>
+          </div>
+
+          <button type="submit" id="btn-auth-submit" class="btn btn-primary btn-block" style="margin-top: 16px;">
             <span id="btn-auth-text">Sign in</span>
           </button>
         </form>

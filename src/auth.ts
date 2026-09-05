@@ -66,6 +66,9 @@ export interface User {
     discord?: string;
     website?: string;
   };
+  tosAgreedAt?: number;
+  tosAgreedIp?: string;
+  antiMalwareAffirmed?: boolean;
 }
 
 export const userStore = new Map<string, User>(); // email -> User
