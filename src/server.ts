@@ -41,16 +41,15 @@ import {
   generateLicenseKey,
   seedDemoUser,
   loadDatabaseFromDisk,
-  saveDatabaseToDisk
+  saveDatabaseToDisk,
+  getDataDir
 } from "./auth.js";
 import { relayServer } from "./tunnel/RelayServer.js";
 
 const API_SECRET_KEY = process.env.API_SECRET_KEY || process.env.MASTER_API_TOKEN || "svl_secret_token_2026";
 const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || "svl_prod_sec_99a8b7c6d5";
 const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 150) * 1024 * 1024;
-const DATA_MODS_DIR = fs.existsSync(path.resolve(process.cwd(), "data", "mods"))
-  ? path.resolve(process.cwd(), "data", "mods")
-  : path.resolve(APP_ROOT, "data", "mods");
+const DATA_MODS_DIR = path.resolve(getDataDir(), "mods");
 const PUBLIC_DIR = fs.existsSync(path.resolve(process.cwd(), "public"))
   ? path.resolve(process.cwd(), "public")
   : path.resolve(APP_ROOT, "public");
@@ -250,7 +249,7 @@ export interface ServerPayload {
 }
 
 // Persistent Server Stores
-const SERVERS_DB_FILE = path.resolve(APP_ROOT, "data", "servers.json");
+const SERVERS_DB_FILE = path.resolve(getDataDir(), "servers.json");
 const serverStore = new Map<string, ServerPayload>();
 const serverOwnerStore = new Map<string, string>(); // serverKey -> tokenHash
 

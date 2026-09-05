@@ -24,12 +24,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const APP_ROOT = process.env.APP_ROOT || (fs.existsSync(path.resolve(process.cwd(), "package.json")) ? process.cwd() : path.resolve(__dirname, ".."));
 
-const getDbPath = (): string => {
+export const getDataDir = (): string => {
+  if (process.env.DATA_DIR) {
+    const dir = path.resolve(process.env.DATA_DIR);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  }
   const localDataDir = path.resolve(APP_ROOT, "data");
   if (!fs.existsSync(localDataDir)) {
     fs.mkdirSync(localDataDir, { recursive: true });
   }
-  return path.resolve(localDataDir, "database.json");
+  return localDataDir;
+};
+
+const getDbPath = (): string => {
+  return path.resolve(getDataDir(), "database.json");
 };
 
 const DB_FILE = getDbPath();
