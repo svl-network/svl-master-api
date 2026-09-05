@@ -263,7 +263,7 @@ export const seedDemoUser = () => {
       sponsored: true,
       bannerUrl: "https://raw.githubusercontent.com/PolyMC/PolyMC/develop/launcher/resources/multimc/scalable/multimc.svg",
       links: {
-        store: "https://store.sunveil.net",
+        store: "https://sunveilsmp.tebex.io",
         discord: "https://discord.gg/sunveil",
         website: "https://sunveil.net"
       }
