@@ -561,8 +561,12 @@ const getBaseUrl = (req: { headers: Record<string, string | string[] | undefined
   return `${proto}://${host}`;
 };
 
-// 1. Health-Check Endpunkt
+// 1. Health-Check Endpunkte
 fastify.get("/health", async () => {
+  return { status: "ok", uptime: process.uptime(), registeredServers: serverStore.size };
+});
+
+fastify.get("/api/v1/health", async () => {
   return { status: "ok", uptime: process.uptime(), registeredServers: serverStore.size };
 });
 
@@ -2281,15 +2285,6 @@ const seedDemoServers = () => {
 
   saveServersToDisk();
 };
-
-// Health Check Endpoints (For Railway, Docker, Kubernetes & Uptime Monitors)
-fastify.get("/health", async () => {
-  return { status: "ok", timestamp: Date.now(), uptime: Math.floor(process.uptime()) };
-});
-
-fastify.get("/api/v1/health", async () => {
-  return { status: "ok", timestamp: Date.now(), uptime: Math.floor(process.uptime()) };
-});
 
 const start = async () => {
   try {
