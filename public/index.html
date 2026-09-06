@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sunveil Realms — Zero-Portforwarding Minecraft Tunnels & Client Sync</title>
-  <meta name="description" content="Secure, high-performance zero-portforwarding tunnel relay and mod synchronization platform for Minecraft Paper, Spigot, Fabric, Forge, and NeoForge servers.">
+  <meta name="description" content="Secure, high-performance zero-portforwarding tunnel relay and client mod synchronization platform for Minecraft Paper, Spigot, Fabric, Forge, and NeoForge servers.">
   <link rel="canonical" href="https://realms.sunveil.net/">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
@@ -12,7 +12,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://realms.sunveil.net/">
   <meta property="og:title" content="Sunveil Realms — Zero-Portforwarding Minecraft Tunnels & Client Sync">
-  <meta property="og:description" content="Secure, high-performance zero-portforwarding tunnel relay and mod synchronization platform for Minecraft Paper, Spigot, Fabric, Forge, and NeoForge servers.">
+  <meta property="og:description" content="Secure, high-performance zero-portforwarding tunnel relay and mod synchronization platform for Minecraft Java Edition.">
   <meta property="og:site_name" content="Sunveil Network">
   <meta property="og:image" content="https://realms.sunveil.net/favicon.svg">
 
@@ -41,8 +41,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=6.3">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=7.0">
 
   <!-- Google AdSense Account Verification & Auto-Ads Tag -->
   <meta name="google-adsense-account" content="ca-pub-9942170676537673">
@@ -56,36 +56,39 @@
   <header class="site-header">
     <div class="header-inner">
       <a href="/" class="brand">
-        <svg class="brand-mark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
+        <div class="brand-mark-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
         <span class="brand-name">Sunveil Realms</span>
       </a>
 
       <nav class="nav-links">
         <a href="#how-it-works">How it works</a>
+        <a href="#realms-directory">Live Realms</a>
         <a href="#features">Features</a>
         <a href="#specs">Specifications</a>
         <a href="#bridge">Server setup</a>
         <a href="#comparison">Comparison</a>
-        <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" class="nav-external" style="color: #10b981; font-weight: 700;">Store ↗</a>
-        <a href="https://sunveil.net" target="_blank" class="nav-external">Server ↗</a>
+        <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); font-weight: 600;">Store ↗</a>
+        <a href="https://sunveil.net" target="_blank" rel="noopener noreferrer">Server ↗</a>
       </nav>
 
       <div class="nav-actions">
         <!-- Guest State -->
         <div id="nav-guest-actions" class="nav-auth-group">
-          <a href="https://ko-fi.com/sunveil" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="display: flex; align-items: center; gap: 5px; color: #f43f5e; font-weight: 600;">
+          <a href="https://ko-fi.com/sunveil" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="color: #f43f5e; font-weight: 600;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
             </svg>
             <span>Tip Jar</span>
           </a>
-          <button id="btn-open-auth" class="btn btn-secondary" data-action="open-login">
-            Dashboard
+          <button id="btn-open-auth" class="btn btn-secondary btn-sm" data-action="open-login">
+            Sign In
           </button>
-          <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-primary">
-            Download
+          <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-primary btn-sm">
+            Download Client
           </a>
         </div>
 
@@ -109,200 +112,324 @@
   <main>
     <!-- 1. Hero Section -->
     <section class="hero">
-      <div class="container hero-container">
-        <div class="hero-content">
-          <p class="hero-kicker">Sunveil Connect</p>
-          <h1 class="hero-title">Keep Minecraft clients synchronized with your server.</h1>
-          <p class="hero-description">
-            Sunveil Connect handles client-side synchronization for supported Minecraft servers. Players can install and update the required files without manually managing mod folders.
-          </p>
-
-          <div class="hero-actions">
-            <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-primary btn-lg">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
+      <div class="container">
+        <div class="hero-grid">
+          <div class="hero-content">
+            <div class="hero-kicker-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
-              Download Sunveil Connect
-            </a>
-            <button id="btn-hero-owner" class="btn btn-secondary btn-lg" data-action="open-login">
-              For Server Owners
-            </button>
+              <span>Zero-Portforwarding Relay &amp; Client Mod Sync</span>
+            </div>
+            <h1 class="hero-title">
+              Minecraft Multiplayer Tunnels &amp; <span>Client Sync</span>
+            </h1>
+            <p class="hero-description">
+              Host your Minecraft servers without port forwarding and keep player clients synchronized automatically. Features encrypted TCP tunnels, Modrinth edge downloads, and SHA-512 integrity checks.
+            </p>
+
+            <div class="hero-actions">
+              <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-primary btn-lg">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download Sunveil Connect
+              </a>
+              <button id="btn-hero-owner" class="btn btn-secondary btn-lg" data-action="open-login">
+                Server Owner Portal
+              </button>
+            </div>
+
+            <div class="hero-specs">
+              <div class="spec-pill">Windows 10 / 11 64-bit</div>
+              <div class="spec-pill">Java 17 / 21 Detected</div>
+              <div class="spec-pill">Paper • Fabric • Forge • NeoForge</div>
+            </div>
           </div>
 
-          <div class="hero-specs">
-            <span>Windows 10 / 11 64-bit</span>
-            <span class="spec-divider">•</span>
-            <span>Minecraft Java Edition</span>
-            <span class="spec-divider">•</span>
-            <span>Forge &amp; Fabric support</span>
+          <!-- Architecture Visualizer Card -->
+          <div class="arch-card">
+            <div class="arch-header">
+              <span class="arch-title">Architecture &amp; Relay State</span>
+              <span class="status-badge status-online">Relay Live</span>
+            </div>
+
+            <div class="arch-flow-diagram">
+              <div class="arch-node">
+                <div class="arch-node-left">
+                  <div class="arch-node-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                      <line x1="8" y1="21" x2="16" y2="21"></line>
+                      <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="arch-node-title">Sunveil Connect (Qt6 C++)</div>
+                    <div class="arch-node-sub">Desktop Client • Delta Mod Sync</div>
+                  </div>
+                </div>
+                <span class="badge badge-subtle">Client Engine</span>
+              </div>
+
+              <div class="arch-connector">
+                <span class="arch-connector-line"></span>
+                <span>TLS 1.3 / WebSocket Manifest Sync</span>
+                <span class="arch-connector-line"></span>
+              </div>
+
+              <div class="arch-node">
+                <div class="arch-node-left">
+                  <div class="arch-node-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="arch-node-title">Master API &amp; Relay Gateway</div>
+                    <div class="arch-node-sub">realms.sunveil.net • Zero-Portforwarding</div>
+                  </div>
+                </div>
+                <span class="badge badge-subtle">Fastify Node</span>
+              </div>
+
+              <div class="arch-connector">
+                <span class="arch-connector-line"></span>
+                <span>Encrypted Raw TCP Tunnel Framing</span>
+                <span class="arch-connector-line"></span>
+              </div>
+
+              <div class="arch-node">
+                <div class="arch-node-left">
+                  <div class="arch-node-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                      <line x1="4" y1="22" x2="4" y2="15"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="arch-node-title">Minecraft Server (SVL-Bridge)</div>
+                    <div class="arch-node-sub">Java 17/21 • Fabric / Forge / Paper</div>
+                  </div>
+                </div>
+                <span class="badge badge-subtle">Server Node</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 2. Actual Product Flow (3 Steps) -->
+    <!-- 2. Live Realms Directory (Real-time Showcase) -->
+    <section class="section border-top" id="realms-directory">
+      <div class="container">
+        <div class="section-head">
+          <p class="section-kicker">Multiplayer Directory</p>
+          <h2 class="section-title">Live Public Realms</h2>
+          <p class="section-subtitle">Browse active community servers with automated client synchronization and zero configuration.</p>
+        </div>
+
+        <div class="directory-controls">
+          <div class="search-input-wrap">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="realm-search-input" class="search-input" placeholder="Filter by realm name, key, or loader...">
+          </div>
+
+          <div class="filter-pills">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="fabric">Fabric</button>
+            <button class="filter-btn" data-filter="paper">Paper / Spigot</button>
+            <button class="filter-btn" data-filter="neoforge">NeoForge</button>
+            <button class="filter-btn" data-filter="forge">Forge</button>
+          </div>
+        </div>
+
+        <div id="realms-grid" class="realms-grid">
+          <!-- Dynamically populated via app.js -->
+          <div class="skeleton-card">
+            <div class="skeleton-line" style="width: 40%;"></div>
+            <div class="skeleton-line" style="width: 75%;"></div>
+            <div class="skeleton-line" style="width: 60%; margin-top: auto;"></div>
+          </div>
+          <div class="skeleton-card">
+            <div class="skeleton-line" style="width: 45%;"></div>
+            <div class="skeleton-line" style="width: 80%;"></div>
+            <div class="skeleton-line" style="width: 50%; margin-top: auto;"></div>
+          </div>
+          <div class="skeleton-card">
+            <div class="skeleton-line" style="width: 35%;"></div>
+            <div class="skeleton-line" style="width: 70%;"></div>
+            <div class="skeleton-line" style="width: 65%; margin-top: auto;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Technical Process Flow -->
     <section class="section border-top" id="how-it-works">
       <div class="container">
         <div class="section-head">
+          <p class="section-kicker">Architecture</p>
           <h2 class="section-title">How synchronization works</h2>
-          <p class="section-subtitle">A straightforward technical process between server, API registry, and player client.</p>
+          <p class="section-subtitle">A deterministic three-step process between server bridge, master API registry, and player client.</p>
         </div>
 
         <div class="process-grid">
           <div class="process-step">
-            <div class="step-header">
-              <span class="step-num">1</span>
-              <h3 class="step-title">Server bridge</h3>
-            </div>
+            <div class="step-num-badge">01</div>
+            <h3 class="step-title">Server bridge inspection</h3>
             <p class="step-text">
-              Install the <code>svl-bridge</code> plugin on your Minecraft server. The bridge inspects local mod files and generates a manifest with version metadata and SHA-256 hashes.
+              Install <code>svl-bridge</code> on your Minecraft server. The bridge hashes all server mods, config assets, and loader requirements into a deterministic SHA-512 manifest.
             </p>
           </div>
 
           <div class="process-step">
-            <div class="step-header">
-              <span class="step-num">2</span>
-              <h3 class="step-title">Synchronization registry</h3>
-            </div>
+            <div class="step-num-badge">02</div>
+            <h3 class="step-title">Relay &amp; registry registration</h3>
             <p class="step-text">
-              The bridge communicates with the Sunveil Master API to publish current server requirements, active player counts, and Modrinth CDN mirrors.
+              The bridge connects via WebSocket tunnel to the Master API, allocating an encrypted zero-portforwarding subdomain (e.g. <code>myrealm.realms.sunveil.net</code>).
             </p>
           </div>
 
           <div class="process-step">
-            <div class="step-header">
-              <span class="step-num">3</span>
-              <h3 class="step-title">Client update</h3>
-            </div>
+            <div class="step-num-badge">03</div>
+            <h3 class="step-title">Delta client sync &amp; launch</h3>
             <p class="step-text">
-              Sunveil Connect compares the player's local installation against the server manifest, downloads only missing or changed files, verifies checksums, and launches the game.
+              Sunveil Connect compares the player's local directory against the manifest, downloads only missing or changed files from Modrinth edge CDNs, verifies hashes, and launches.
             </p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 3. Features (Matching Real Implementation) -->
+    <!-- 4. Core Capabilities -->
     <section class="section border-top" id="features">
       <div class="container">
         <div class="section-head">
-          <h2 class="section-title">Core capabilities</h2>
-          <p class="section-subtitle">Functional features provided by Sunveil Connect and the server bridge.</p>
+          <p class="section-kicker">Features</p>
+          <h2 class="section-title">Engineered for server reliability</h2>
+          <p class="section-subtitle">Production-grade features for server administrators and community players.</p>
         </div>
 
         <div class="features-grid">
           <div class="feature-item">
-            <div class="feature-icon">
+            <div class="feature-icon-box">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <polyline points="1 20 1 14 7 14"></polyline>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
               </svg>
             </div>
-            <h3 class="feature-title">Client synchronization</h3>
+            <h3 class="feature-title">Automated delta synchronization</h3>
             <p class="feature-text">
-              Synchronize required mods, configuration files, and asset versions between the server and player installations automatically.
+              Players never download redundant files. Only modified or missing configuration files and mods are transferred over encrypted streams.
             </p>
           </div>
 
           <div class="feature-item">
-            <div class="feature-icon">
+            <div class="feature-icon-box">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
               </svg>
             </div>
-            <h3 class="feature-title">Incremental downloads</h3>
+            <h3 class="feature-title">Zero-portforwarding tunnels</h3>
             <p class="feature-text">
-              Only transfer files that have changed or are missing instead of repeatedly downloading complete archives.
+              Host servers behind CGNAT, home routers, or residential connections with high-performance raw TCP multiplexed relays.
             </p>
           </div>
 
           <div class="feature-item">
-            <div class="feature-icon">
+            <div class="feature-icon-box">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                 <line x1="12" y1="22.08" x2="12" y2="12"></line>
               </svg>
             </div>
-            <h3 class="feature-title">Modrinth integration</h3>
+            <h3 class="feature-title">Modrinth edge CDN routing</h3>
             <p class="feature-text">
-              Use Modrinth metadata and CDN downloads to install client-side optimization mods such as Sodium, Iris, and performance utilities.
+              Direct integration with Modrinth infrastructure delivers client optimization mods (Sodium, Iris, Lithium) with high-speed CDN delivery.
             </p>
           </div>
 
           <div class="feature-item">
-            <div class="feature-icon">
+            <div class="feature-icon-box">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
               </svg>
             </div>
-            <h3 class="feature-title">File integrity verification</h3>
+            <h3 class="feature-title">SHA-512 integrity verification</h3>
             <p class="feature-text">
-              Verify downloaded files against server-provided SHA-256 and SHA-512 hashes before allowing the client to execute them.
+              Every binary and jar file is verified against cryptographic hashes before execution, preventing corrupted or tampered downloads.
             </p>
           </div>
 
           <div class="feature-item">
-            <div class="feature-icon">
+            <div class="feature-icon-box">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                 <line x1="8" y1="21" x2="16" y2="21"></line>
                 <line x1="12" y1="17" x2="12" y2="21"></line>
               </svg>
             </div>
-            <h3 class="feature-title">Server discovery</h3>
+            <h3 class="feature-title">Real-time performance telemetry</h3>
             <p class="feature-text">
-              Players can browse registered servers in the desktop client's multiplayer browser and connect with one click.
+              Monitor server tick rate (TPS), memory allocation, CPU load, and connected player counts directly from your owner dashboard.
             </p>
           </div>
 
           <div class="feature-item">
-            <div class="feature-icon">
+            <div class="feature-icon-box">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                 <circle cx="12" cy="7" r="4"></circle>
               </svg>
             </div>
-            <h3 class="feature-title">Account handling</h3>
+            <h3 class="feature-title">Multi-account &amp; offline support</h3>
             <p class="feature-text">
-              Support for official Microsoft OAuth2 authentication alongside local offline profiles for flexible local testing.
+              Native support for official Microsoft OAuth2 profiles alongside local offline profiles for development and testing environments.
             </p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 4. Technical Specifications -->
+    <!-- 5. Technical Specifications -->
     <section class="section border-top" id="specs">
       <div class="container">
         <div class="section-head">
+          <p class="section-kicker">Specifications</p>
           <h2 class="section-title">Technical specifications</h2>
-          <p class="section-subtitle">System requirements, protocols, and compatibility details.</p>
+          <p class="section-subtitle">System requirements, network protocols, and compatibility parameters.</p>
         </div>
 
         <div class="specs-grid">
           <div class="spec-card">
-            <h3 class="spec-card-title">Desktop Client</h3>
+            <h3 class="spec-card-title">Desktop Client (Connect)</h3>
             <ul class="spec-list">
-              <li><span>Platform</span> <strong>Windows 10 / 11 (64-bit)</strong></li>
-              <li><span>Framework</span> <strong>C++ / Qt 6</strong></li>
-              <li><span>Runtime</span> <strong>Java 17 / 21 (bundled/detected)</strong></li>
-              <li><span>Authentication</span> <strong>Microsoft OAuth2 &amp; Offline</strong></li>
-              <li><span>Distribution</span> <strong>Portable &amp; Installer EXE</strong></li>
+              <li><span>Platform</span> <strong>Windows 10 / 11 64-bit</strong></li>
+              <li><span>Framework</span> <strong>C++ / Qt 6.7</strong></li>
+              <li><span>Runtime</span> <strong>Java 17 / 21</strong></li>
+              <li><span>Auth Engine</span> <strong>Microsoft OAuth2 / Offline</strong></li>
+              <li><span>Distribution</span> <strong>Self-Contained Installer EXE</strong></li>
             </ul>
           </div>
 
           <div class="spec-card">
-            <h3 class="spec-card-title">Server Bridge</h3>
+            <h3 class="spec-card-title">Server Bridge (Plugin)</h3>
             <ul class="spec-list">
-              <li><span>Environment</span> <strong>Java 17 or higher</strong></li>
-              <li><span>Server Software</span> <strong>Paper, Spigot, Fabric, Forge</strong></li>
+              <li><span>JVM Requirement</span> <strong>Java 17 or higher</strong></li>
+              <li><span>Server Engines</span> <strong>Fabric, Forge, NeoForge, Paper</strong></li>
               <li><span>Minecraft Versions</span> <strong>1.20.x, 1.21.x</strong></li>
               <li><span>Configuration</span> <strong>YAML (config.yml)</strong></li>
-              <li><span>Plugin Format</span> <strong>Standard Java JAR</strong></li>
+              <li><span>Protocol Support</span> <strong>Encrypted Tunnel Daemon</strong></li>
             </ul>
           </div>
 
@@ -310,110 +437,116 @@
             <h3 class="spec-card-title">Protocol &amp; Security</h3>
             <ul class="spec-list">
               <li><span>API Transport</span> <strong>HTTPS / TLS 1.3</strong></li>
-              <li><span>Payload Format</span> <strong>JSON REST API</strong></li>
-              <li><span>Hash Algorithm</span> <strong>SHA-256 &amp; SHA-512</strong></li>
-              <li><span>Session Auth</span> <strong>HMAC SHA-256 JWT</strong></li>
-              <li><span>CDN Mirroring</span> <strong>Modrinth Edge Network</strong></li>
+              <li><span>Payload Standard</span> <strong>JSON REST API &amp; WebSocket</strong></li>
+              <li><span>Checksum Algorithm</span> <strong>SHA-256 &amp; SHA-512</strong></li>
+              <li><span>Session Token</span> <strong>In-Memory HMAC JWT</strong></li>
+              <li><span>CDN Delivery</span> <strong>Modrinth Edge Network</strong></li>
             </ul>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 5. Server Owner Setup Guide -->
+    <!-- 6. Server Owner Setup Guide -->
     <section class="section border-top" id="bridge">
       <div class="container">
         <div class="section-head">
-          <h2 class="section-title">Server owner onboarding</h2>
-          <p class="section-subtitle">How to connect your Minecraft server to the Sunveil network.</p>
+          <p class="section-kicker">Onboarding</p>
+          <h2 class="section-title">Connect your server in minutes</h2>
+          <p class="section-subtitle">Step-by-step setup to register your Minecraft realm on the Sunveil network.</p>
         </div>
 
         <div class="onboarding-steps">
           <div class="onboarding-step-item">
-            <span class="onboarding-step-num">Step 1</span>
+            <span class="onboarding-step-num">STEP 01</span>
             <div class="onboarding-step-title">Create account</div>
-            <p class="onboarding-step-desc">Register a developer account in the dashboard using your email address.</p>
+            <p class="onboarding-step-desc">Register a server owner account using your email address.</p>
           </div>
 
           <div class="onboarding-step-item">
-            <span class="onboarding-step-num">Step 2</span>
-            <div class="onboarding-step-title">Generate key</div>
+            <span class="onboarding-step-num">STEP 02</span>
+            <div class="onboarding-step-title">Generate license</div>
             <p class="onboarding-step-desc">Obtain your unique bridge license key (e.g. <code>SVL-FREE-xxxx-xxxx</code>).</p>
           </div>
 
           <div class="onboarding-step-item">
-            <span class="onboarding-step-num">Step 3</span>
-            <div class="onboarding-step-title">Install plugin / mod</div>
-            <p class="onboarding-step-desc">Download the bridge jar for your engine (<a href="/downloads/svl-bridge-fabric.jar" class="text-link">Fabric</a>, <a href="/downloads/svl-bridge-forge.jar" class="text-link">Forge</a>, <a href="/downloads/svl-bridge-neoforge.jar" class="text-link">NeoForge</a>, <a href="/downloads/svl-bridge-paper.jar" class="text-link">Paper</a>) and drop it into your <code>plugins</code> or <code>mods</code> folder.</p>
+            <span class="onboarding-step-num">STEP 03</span>
+            <div class="onboarding-step-title">Install bridge jar</div>
+            <p class="onboarding-step-desc">Place the bridge JAR for your server engine into your <code>plugins</code> or <code>mods</code> directory.</p>
           </div>
 
           <div class="onboarding-step-item">
-            <span class="onboarding-step-num">Step 4</span>
+            <span class="onboarding-step-num">STEP 04</span>
             <div class="onboarding-step-title">Configure YAML</div>
-            <p class="onboarding-step-desc">Paste your license key into <code>plugins/SVLBridge/config.yml</code> under <code>master-api.license-key</code>.</p>
+            <p class="onboarding-step-desc">Paste your license key in <code>plugins/SVLBridge/config.yml</code> under <code>license-key</code>.</p>
           </div>
 
           <div class="onboarding-step-item">
-            <span class="onboarding-step-num">Step 5</span>
-            <div class="onboarding-step-title">Ready to join</div>
-            <p class="onboarding-step-desc">Start your server. Players can now synchronize and connect from Sunveil Connect.</p>
+            <span class="onboarding-step-num">STEP 05</span>
+            <div class="onboarding-step-title">Launch &amp; sync</div>
+            <p class="onboarding-step-desc">Start your server. Players can now synchronize and connect instantly from Sunveil Connect.</p>
           </div>
         </div>
 
-        <div class="cta-panel" style="margin-top: 24px;">
+        <div class="cta-panel">
           <div class="cta-body">
-            <h3 class="cta-title">Ready to configure your server?</h3>
+            <h3 class="cta-title">Ready to register your server?</h3>
             <p class="cta-text">
-              Create an account to generate your bridge license key and manage server visibility settings.
+              Sign in to generate your bridge license key and manage server visibility settings.
             </p>
             <div class="cta-tags">
-              <span>Paper</span>
-              <span>Spigot</span>
-              <span>Fabric</span>
-              <span>Forge</span>
+              <span>Paper / Spigot</span>
+              <span>Fabric 1.21.1</span>
+              <span>NeoForge 1.21.1</span>
+              <span>Forge 1.20.1</span>
             </div>
           </div>
           <div class="cta-actions">
             <button id="btn-bridge-register" class="btn btn-primary" data-action="open-register">
-              Create server key
+              Create Server Key
             </button>
-            <a href="https://github.com/svl-network/svl-bridge" target="_blank" class="btn btn-secondary">
-              Bridge source code ↗
+            <a href="https://github.com/svl-network/svl-bridge" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+              Bridge Source Code ↗
             </a>
           </div>
         </div>
 
         <!-- Official BisectHosting Partner Promotion Card -->
-        <div style="background: linear-gradient(135deg, rgba(0, 163, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%); border: 1px solid rgba(0, 163, 255, 0.3); border-radius: var(--radius-lg); padding: 22px; margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
-          <div style="max-width: 600px;">
-            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #38bdf8; margin-bottom: 4px;">Official Hosting Partner</div>
-            <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">Need a 24/7 Dedicated Server for Sunveil Bridge?</h3>
-            <p style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.45;">
-              Get instant 1-click modpack setup, NVMe SSD storage, and automated backups on BisectHosting. Save 25% on your first month with our partner link.
+        <div class="partner-card">
+          <div style="max-width: 620px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--status-info); margin-bottom: 4px;">
+              Official Hosting Partner
+            </div>
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+              Need a 24/7 Dedicated Server for Sunveil Bridge?
+            </h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+              Get instant 1-click modpack setup, NVMe SSD storage, automated backups, and low-latency network routes on BisectHosting. Save 25% on your first month with code <code>SUNVEIL</code>.
             </p>
           </div>
-          <a href="https://www.bisecthosting.com/clients/aff.php?aff=7448" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="white-space: nowrap;">
+          <a href="https://www.bisecthosting.com/clients/aff.php?aff=7448" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
             Get 25% Off at BisectHosting ↗
           </a>
         </div>
       </div>
     </section>
 
-    <!-- 6. Comparison Table -->
+    <!-- 7. Comparison Table -->
     <section class="section border-top" id="comparison">
       <div class="container">
         <div class="section-head">
-          <h2 class="section-title">Manual setup vs. Sunveil Connect</h2>
-          <p class="section-subtitle">How client-side automated synchronization compares to manual file distribution.</p>
+          <p class="section-kicker">Comparison</p>
+          <h2 class="section-title">Manual file distribution vs. Sunveil Connect</h2>
+          <p class="section-subtitle">How client-side automated synchronization compares to manual zip distribution.</p>
         </div>
 
         <div class="table-container">
           <table class="comparison-table">
             <thead>
               <tr>
-                <th style="width: 25%;">Task</th>
-                <th style="width: 37.5%;">Manual distribution</th>
-                <th style="width: 37.5%;" class="col-highlight">Sunveil Connect</th>
+                <th style="width: 25%;">Capability</th>
+                <th style="width: 37.5%;">Manual Zip Distribution</th>
+                <th style="width: 37.5%;" class="col-highlight">Sunveil Connect &amp; Realms</th>
               </tr>
             </thead>
             <tbody>
@@ -448,27 +581,8 @@
       </div>
     </section>
 
-    <!-- 7. Sponsor & Ad Unit -->
-    <section class="ad-section">
-      <div class="container">
-        <div class="ad-container">
-          <div class="ad-label">Advertisement &amp; Sponsor</div>
-          <div class="ad-slot">
-            <ins class="adsbygoogle"
-                 style="display:block; width:100%; min-height:90px;"
-                 data-ad-client="ca-pub-9942170676537673"
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
-            <script>
-                 try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
-            </script>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- 8. Disclaimer Section -->
-    <section class="section border-top" style="padding: 32px 0;">
+    <section class="section border-top" style="padding: var(--space-8) 0;">
       <div class="container">
         <div class="disclaimer-box">
           <p>
@@ -486,7 +600,7 @@
         <div class="footer-about">
           <div class="footer-col-title">Sunveil Realms</div>
           <p style="font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 12px;">
-            A client synchronization and server bridge platform for Minecraft Java Edition.
+            A high-performance zero-portforwarding multiplayer relay and client synchronization platform for Minecraft Java Edition.
           </p>
           <p style="font-size: 12px; color: var(--text-muted);">
             © 2026 Sunveil Network. All rights reserved.
@@ -496,10 +610,11 @@
         <div>
           <div class="footer-col-title">Product</div>
           <ul class="footer-nav">
-            <li><a href="https://github.com/svl-network/svl-connect/releases/latest" target="_blank">Download Client</a></li>
-            <li><a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" style="color: #10b981; font-weight: 600;">🛒 Webstore (Tebex) ↗</a></li>
+            <li><a href="https://github.com/svl-network/svl-connect/releases/latest" target="_blank" rel="noopener noreferrer">Download Client</a></li>
+            <li><a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); font-weight: 600;">🛒 Webstore (Tebex) ↗</a></li>
             <li><a href="#how-it-works">How it works</a></li>
-            <li><a href="#bridge">Server Owners</a></li>
+            <li><a href="#realms-directory">Live Realms</a></li>
+            <li><a href="#bridge">Server Setup</a></li>
             <li><a href="#specs">Specifications</a></li>
           </ul>
         </div>
@@ -518,19 +633,19 @@
         <div>
           <div class="footer-col-title">Community &amp; Partners</div>
           <ul class="footer-nav">
-            <li><a href="https://www.bisecthosting.com/clients/aff.php?aff=7448" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; font-weight: 600;">⚡ Rent a Server (25% Off) ↗</a></li>
-            <li><a href="https://discord.gg/sunveil" target="_blank">Discord Community</a></li>
-            <li><a href="https://github.com/svl-network/svl-connect" target="_blank">GitHub (Client)</a></li>
-            <li><a href="https://github.com/svl-network/svl-bridge" target="_blank">GitHub (Bridge)</a></li>
-            <li><a href="https://github.com/svl-network/svl-master-api" target="_blank">GitHub (Master API)</a></li>
-            <li><a href="https://sunveil.net" target="_blank">Sunveil SMP Server</a></li>
+            <li><a href="https://www.bisecthosting.com/clients/aff.php?aff=7448" target="_blank" rel="noopener noreferrer" style="color: var(--status-info); font-weight: 600;">⚡ Rent a Server (25% Off) ↗</a></li>
+            <li><a href="https://discord.gg/sunveil" target="_blank" rel="noopener noreferrer">Discord Community</a></li>
+            <li><a href="https://github.com/svl-network/svl-connect" target="_blank" rel="noopener noreferrer">GitHub (Client)</a></li>
+            <li><a href="https://github.com/svl-network/svl-bridge" target="_blank" rel="noopener noreferrer">GitHub (Bridge)</a></li>
+            <li><a href="https://github.com/svl-network/svl-master-api" target="_blank" rel="noopener noreferrer">GitHub (Master API)</a></li>
+            <li><a href="https://sunveil.net" target="_blank" rel="noopener noreferrer">Sunveil SMP Server</a></li>
           </ul>
         </div>
       </div>
 
       <div class="footer-bottom">
         <span>Sunveil Connect — Independent Minecraft Software</span>
-        <span><a href="/admin.html" style="color: inherit; text-decoration: none; opacity: 0.5;">🔒 Staff Portal</a> | Storage: Technically necessary local session storage only (No advertising cookies)</span>
+        <span><a href="/admin.html" style="color: inherit; text-decoration: none; opacity: 0.5;">🔒 Staff Portal</a> | In-memory session auth (Zero third-party tracking cookies)</span>
       </div>
     </div>
   </footer>
@@ -576,30 +691,30 @@
           </div>
 
           <!-- Anti-Malware & Terms of Service Pledge (Register Tab Only) -->
-          <div id="register-tos-group" class="form-field hidden" style="margin-top: 14px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding-top: 14px;">
-            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-              <div style="font-weight: 700; color: #ef4444; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <div id="register-tos-group" class="form-field hidden" style="margin-top: 14px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+            <div style="background: var(--status-offline-tint); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px;">
+              <div style="font-weight: 700; color: var(--status-offline); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                 <span>🛡️ Anti-Malware &amp; Player Protection Policy</span>
               </div>
-              <p style="font-size: 12px; line-height: 1.4; color: var(--text-secondary, #a1a1aa); margin: 0;">
+              <p style="font-size: 12px; line-height: 1.4; color: var(--text-secondary); margin: 0;">
                 By generating a server key on Sunveil Network, you explicitly agree that your server and connected tunnel will NOT distribute malware, RATs, crashers, exploits, or malicious payloads to connected players.
               </p>
             </div>
 
             <!-- Scrollable Terms of Service Container -->
             <label class="form-label" style="font-size: 12px;">Terms of Service &amp; Acceptable Use</label>
-            <div style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 6px; padding: 10px; font-size: 11px; line-height: 1.45; color: var(--text-muted, #71717a); margin-bottom: 12px;">
-              <strong>1. Administrative Ban &amp; Removal Authority:</strong> Administrators and Sunveil Network staff reserve full authority to immediately suspend, ban, or delete any server or account violating policies <strong>without refund</strong>.<br><br>
-              <strong>2. Strict No-Refund Policy (§ 356 Abs. 5 BGB):</strong> Digital services, server boosts, and licenses are delivered immediately upon transaction. You explicitly consent to immediate service execution and waive the statutory right of withdrawal.<br><br>
-              <strong>3. Zero-Tolerance for Malware:</strong> Hosting, distributing, or transmitting viruses, trojans, ransomware, or malicious Minecraft mods/plugins is strictly forbidden.<br><br>
-              <strong>4. Player Protection:</strong> You must not attempt to compromise the security, integrity, or hardware of any client connecting to your realm.
+            <div style="max-height: 120px; overflow-y: auto; background: var(--color-surface-2); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 10px; font-size: 11px; line-height: 1.45; color: var(--text-muted); margin-bottom: 12px;">
+              <strong>1. Administrative Authority:</strong> Administrators reserve full authority to immediately suspend or ban any server or account violating safety policies <strong>without refund</strong>.<br><br>
+              <strong>2. No-Refund Policy (§ 356 Abs. 5 BGB):</strong> Digital services and server keys are delivered immediately upon transaction.<br><br>
+              <strong>3. Zero-Tolerance for Malware:</strong> Distributing malicious Minecraft mods/plugins or unauthorized executable code is strictly forbidden.<br><br>
+              <strong>4. Player Protection:</strong> You must not attempt to compromise the security or hardware of any connecting client.
             </div>
 
             <!-- TOS Checkbox -->
             <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px;">
               <input type="checkbox" id="input-tos-agree" style="margin-top: 3px; cursor: pointer;">
-              <label for="input-tos-agree" style="font-size: 12px; cursor: pointer; color: var(--text-primary, #f4f4f5); line-height: 1.35;">
-                I agree to the <strong>Terms of Service</strong>, the <strong>No-Refund Policy (§ 356 Abs. 5 BGB)</strong>, and pledge to maintain safe infrastructure.
+              <label for="input-tos-agree" style="font-size: 12px; cursor: pointer; color: var(--text-primary); line-height: 1.35;">
+                I agree to the <strong>Terms of Service</strong>, the <strong>No-Refund Policy</strong>, and pledge to maintain safe infrastructure.
               </label>
             </div>
 
@@ -608,11 +723,11 @@
               <label for="input-tos-phrase" class="form-label" style="font-size: 12px;">
                 Anti-Bot Verification: Type the pledge below to confirm
               </label>
-              <div id="tos-target-phrase" style="background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 11px; color: #38bdf8; margin-bottom: 8px; user-select: text;">
+              <div id="tos-target-phrase" style="background: var(--color-surface-2); border: 1px dashed var(--border-prominent); border-radius: var(--radius-sm); padding: 8px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--status-info); margin-bottom: 8px; user-select: text;">
                 I agree to the Terms of Service and affirm that I will not host malware or harm connected players.
               </div>
               <input type="text" id="input-tos-phrase" class="form-input" placeholder="Type the pledge phrase exactly as shown above..." autocomplete="off" style="font-size: 12px;">
-              <span id="tos-phrase-status" style="font-size: 11px; margin-top: 4px; display: block; color: var(--text-muted, #71717a);">
+              <span id="tos-phrase-status" style="font-size: 11px; margin-top: 4px; display: block; color: var(--text-muted);">
                 ✍️ Type the exact sentence above to enable registration.
               </span>
             </div>
@@ -622,7 +737,6 @@
             <span id="btn-auth-text">Sign in</span>
           </button>
         </form>
-
       </div>
     </div>
   </div>
@@ -633,11 +747,11 @@
   <div id="dashboard-modal" class="modal-backdrop hidden">
     <div class="modal-card modal-card-wide">
       <div class="modal-header">
-        <div class="header-user-meta">
+        <div>
           <h3 class="modal-title">Server Management Dashboard</h3>
-          <span id="dash-email-display" class="user-meta-email">owner@sunveil.net</span>
+          <span id="dash-email-display" style="font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono);">owner@sunveil.net</span>
         </div>
-        <div class="modal-header-actions">
+        <div style="display: flex; gap: 8px; align-items: center;">
           <button id="btn-sync-dash" class="btn btn-secondary btn-sm" title="Live refresh server state">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"></polyline>
@@ -656,73 +770,72 @@
       </div>
 
       <div class="modal-body dash-body">
-        <!-- Multi-Server Slot Selector & Capacity Management -->
-        <div class="server-slots-bar" style="background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <!-- Multi-Server Slot Selector -->
+        <div style="background: var(--color-surface-2); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
           <div>
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-              <span style="font-size: 13px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">🖥️ Server Instances</span>
-              <span id="slot-capacity-badge" class="badge-subtle" style="background: rgba(99, 102, 241, 0.2); color: #818cf8; font-weight: 800; font-family: 'JetBrains Mono', monospace;">Slots: 1 / 1</span>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">Server Instances</span>
+              <span id="slot-capacity-badge" class="badge badge-subtle" style="font-family: var(--font-mono);">Slots: 1 / 1</span>
             </div>
-            <div id="server-slots-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-              <!-- Populated dynamically via app.js -->
+            <div id="server-slots-tabs" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
               <button class="btn btn-primary btn-sm slot-tab active">Server 1 (Active)</button>
             </div>
           </div>
 
           <div style="display: flex; gap: 8px; align-items: center;">
-            <button id="btn-add-server-slot" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 6px;">
-              <span>➕ Add Server</span>
+            <button id="btn-add-server-slot" class="btn btn-secondary btn-sm">
+              <span>➕ Add Instance</span>
             </button>
-            <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #fff; font-weight: 700; border: none; text-decoration: none; display: flex; align-items: center; gap: 6px;">
-              <span>⭐ Upgrade to 4 Slots ↗</span>
+            <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+              <span>⭐ Upgrade Slots ↗</span>
             </a>
           </div>
         </div>
 
-        <!-- Live Real-time Performance Metrics Bar -->
-        <div class="perf-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
-          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">⚡ Tick Rate (TPS)</span>
-              <span id="perf-tps-pill" class="status-badge status-online" style="font-size: 11px;">20.0 TPS</span>
+        <!-- Real-time Performance Metrics Bar -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+          <div class="panel">
+            <div class="flex-between" style="margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">⚡ Tick Rate (TPS)</span>
+              <span id="perf-tps-pill" class="status-badge status-online">20.0 TPS</span>
             </div>
-            <div id="perf-tps-val" style="font-size: 20px; font-weight: 800; color: #10b981; font-family: 'JetBrains Mono', monospace;">20.0 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 20</span></div>
-            <div style="font-size: 11px; color: var(--text-muted, #71717a); margin-top: 4px;">Optimal Game Speed</div>
+            <div id="perf-tps-val" style="font-size: 20px; font-weight: 800; color: var(--status-online); font-family: var(--font-mono);">20.0 <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">/ 20</span></div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Optimal Game Performance</div>
           </div>
 
-          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">🧠 RAM Usage</span>
-              <span id="perf-ram-pct" style="font-size: 11px; color: #38bdf8; font-weight: 700;">34%</span>
+          <div class="panel">
+            <div class="flex-between" style="margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">🧠 RAM Usage</span>
+              <span id="perf-ram-pct" style="font-size: 11px; color: var(--status-info); font-weight: 700; font-family: var(--font-mono);">34%</span>
             </div>
-            <div id="perf-ram-val" style="font-size: 20px; font-weight: 800; color: #f4f4f5; font-family: 'JetBrains Mono', monospace;">2.8 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ 8.0 GB</span></div>
-            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 8px; overflow: hidden;">
-              <div id="perf-ram-bar" style="width: 34%; height: 100%; background: linear-gradient(90deg, #38bdf8, #3b82f6); border-radius: 3px; transition: width 0.3s ease;"></div>
-            </div>
-          </div>
-
-          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">⚙️ CPU Load</span>
-              <span id="perf-cpu-pct" style="font-size: 11px; color: #10b981; font-weight: 700;">14%</span>
-            </div>
-            <div id="perf-cpu-val" style="font-size: 20px; font-weight: 800; color: #f4f4f5; font-family: 'JetBrains Mono', monospace;">14.5%</div>
-            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 8px; overflow: hidden;">
-              <div id="perf-cpu-bar" style="width: 14.5%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 3px; transition: width 0.3s ease;"></div>
+            <div id="perf-ram-val" style="font-size: 20px; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono);">2.8 <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">/ 8.0 GB</span></div>
+            <div style="width: 100%; height: 6px; background: var(--color-surface-1); border-radius: var(--radius-full); margin-top: 8px; overflow: hidden;">
+              <div id="perf-ram-bar" style="width: 34%; height: 100%; background: var(--status-info); border-radius: var(--radius-full); transition: width 0.3s ease;"></div>
             </div>
           </div>
 
-          <div class="perf-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 12px; color: var(--text-secondary, #a1a1aa); font-weight: 600;">⏱️ Server Uptime</span>
-              <span class="status-badge status-online" style="font-size: 10px;">Live</span>
+          <div class="panel">
+            <div class="flex-between" style="margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">⚙️ CPU Load</span>
+              <span id="perf-cpu-pct" style="font-size: 11px; color: var(--status-online); font-weight: 700; font-family: var(--font-mono);">14%</span>
             </div>
-            <div id="perf-uptime-val" style="font-size: 18px; font-weight: 800; color: #f4f4f5; font-family: 'JetBrains Mono', monospace;">24h 12m</div>
-            <div style="font-size: 11px; color: var(--text-muted, #71717a); margin-top: 4px;">Zero downtime recorded</div>
+            <div id="perf-cpu-val" style="font-size: 20px; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono);">14.5%</div>
+            <div style="width: 100%; height: 6px; background: var(--color-surface-1); border-radius: var(--radius-full); margin-top: 8px; overflow: hidden;">
+              <div id="perf-cpu-bar" style="width: 14.5%; height: 100%; background: var(--status-online); border-radius: var(--radius-full); transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="flex-between" style="margin-bottom: 6px;">
+              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">⏱️ Server Uptime</span>
+              <span class="status-badge status-online">Live</span>
+            </div>
+            <div id="perf-uptime-val" style="font-size: 18px; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono);">24h 12m</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Zero downtime recorded</div>
           </div>
         </div>
 
-        <!-- License Key Panel -->
+        <!-- Bridge License Key Panel -->
         <div class="panel">
           <div class="panel-head">
             <h4 class="panel-title">Bridge license key</h4>
@@ -730,7 +843,7 @@
           </div>
           <div class="key-control-row">
             <div class="key-display-box">
-              <span id="license-key-value" class="code-text">SVL-FREE-••••-••••</span>
+              <span id="license-key-value" class="text-mono">SVL-FREE-••••-••••</span>
               <button id="btn-toggle-key" class="btn-icon" title="Toggle visibility" aria-label="Toggle key visibility">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -754,30 +867,30 @@
           </div>
         </div>
 
-        <!-- Real-Time Online Players Panel -->
-        <div class="panel" style="margin-top: 14px;">
-          <div class="panel-head flex-between">
+        <!-- Connected Players Panel -->
+        <div class="panel">
+          <div class="flex-between">
             <div>
-              <h4 class="panel-title">👥 Connected Players Real-time Overlook</h4>
+              <h4 class="panel-title">Connected Players Overlook</h4>
               <p class="panel-subtitle">Players currently connected to your Minecraft instance via Sunveil Bridge.</p>
             </div>
-            <span id="stat-player-count-badge" class="badge-subtle" style="color: #10b981; font-weight: 700;">0 Players Online</span>
+            <span id="stat-player-count-badge" class="badge badge-subtle" style="color: var(--accent-primary); font-weight: 700;">0 Players Online</span>
           </div>
-          <div id="player-list-container" style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 10px; min-height: 48px; align-items: center;">
-            <span style="font-size: 13px; color: var(--text-muted, #71717a); font-style: italic;">No players connected at this moment.</span>
+          <div id="player-list-container" style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; min-height: 44px; align-items: center;">
+            <span style="font-size: 13px; color: var(--text-muted); font-style: italic;">No players connected at this moment.</span>
           </div>
         </div>
 
         <!-- Bridge Downloads Panel -->
         <div class="panel">
-          <div class="panel-head flex-between">
+          <div class="flex-between">
             <div>
               <h4 class="panel-title">Download Sunveil Bridge Plugin</h4>
-              <p class="panel-subtitle">Select the plugin or mod jar matching your Minecraft server loader.</p>
+              <p class="panel-subtitle">Select the plugin or mod JAR matching your Minecraft server loader.</p>
             </div>
-            <a href="https://github.com/svl-network/svl-bridge/releases/latest" target="_blank" class="text-link" style="font-size: 12px; font-weight: 600;">GitHub Releases ↗</a>
+            <a href="https://github.com/svl-network/svl-bridge/releases/latest" target="_blank" rel="noopener noreferrer" class="text-link" style="font-size: 12px; font-weight: 600;">GitHub Releases ↗</a>
           </div>
-          <div class="bridge-downloads-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 12px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 12px;">
             <a href="/downloads/svl-bridge-fabric.jar" download class="btn btn-secondary btn-sm" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none;">
               <span>⚡ Fabric (1.21.1)</span>
               <span style="font-size: 11px; opacity: 0.7;">.jar ⬇</span>
@@ -809,12 +922,12 @@
         <div class="dash-grid">
           <!-- Server Status -->
           <div class="panel">
-            <div class="panel-head flex-between">
+            <div class="flex-between">
               <div>
                 <h4 class="panel-title">Server status</h4>
                 <span id="server-status-pill" class="status-badge status-offline">—</span>
               </div>
-              <span id="server-verified-badge" class="badge-subtle">—</span>
+              <span id="server-verified-badge" class="badge badge-subtle">—</span>
             </div>
             <div class="data-table">
               <div class="data-row">
@@ -823,7 +936,7 @@
               </div>
               <div class="data-row">
                 <span class="data-label">Endpoint</span>
-                <span id="stat-server-ip" class="data-value code-text">—</span>
+                <span id="stat-server-ip" class="data-value text-mono">—</span>
               </div>
               <div class="data-row">
                 <span class="data-label">Engine</span>
@@ -831,7 +944,7 @@
               </div>
               <div class="data-row">
                 <span class="data-label">Connected players</span>
-                <span id="stat-server-players" class="data-value accent-text">—</span>
+                <span id="stat-server-players" class="data-value text-accent">—</span>
               </div>
               <div class="data-row">
                 <span class="data-label">Active files</span>
@@ -846,12 +959,12 @@
 
           <!-- Server Visibility & Sponsoring -->
           <div class="panel">
-            <div class="panel-head flex-between">
+            <div class="flex-between">
               <div>
                 <h4 class="panel-title">Server visibility &amp; boosts</h4>
-                <p class="panel-subtitle">Multiplayer directory &amp; launcher placement.</p>
+                <p class="panel-subtitle">Multiplayer directory placement.</p>
               </div>
-              <span id="boost-sponsored-badge" class="badge-subtle">Standard</span>
+              <span id="boost-sponsored-badge" class="badge badge-subtle">Standard</span>
             </div>
             <div class="boost-box">
               <div class="boost-count-group">
@@ -865,7 +978,7 @@
                 <button id="btn-add-boost" class="btn btn-secondary btn-block">
                   Add daily boost (+1)
                 </button>
-                <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #000; font-weight: 700; border: none; text-align: center; text-decoration: none; display: block; padding: 8px 12px; border-radius: var(--radius-md);">
+                <a href="https://sunveilsmp.tebex.io" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block">
                   👑 Get Sponsored Rank (#1 Pin) ↗
                 </a>
               </div>
@@ -879,7 +992,7 @@
             <h4 class="panel-title">Server branding &amp; links</h4>
             <p class="panel-subtitle">Configure directory banner and external links.</p>
           </div>
-          <form id="settings-form" class="settings-form">
+          <form id="settings-form">
             <div class="form-field">
               <label for="input-banner-url" class="form-label">Banner image URL (1200×320)</label>
               <input type="url" id="input-banner-url" class="form-input" placeholder="https://example.com/banner.png">
@@ -902,27 +1015,27 @@
 
         <!-- Account & Security Section with Trust Score -->
         <div class="panel">
-          <div class="panel-head flex-between">
+          <div class="flex-between">
             <div>
               <h4 class="panel-title">Account, Trust Score &amp; Security</h4>
               <p class="panel-subtitle">Hardware fingerprint status, network reputation, and account limits.</p>
             </div>
-            <span id="account-trust-badge" class="badge-subtle" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 700;">
+            <span id="account-trust-badge" class="badge badge-subtle" style="color: var(--status-online);">
               🛡️ Trust: 95/100 (TRUSTED)
             </span>
           </div>
-          <div class="account-info-box">
+          <div class="account-info-box" style="margin-top: 12px;">
             <div class="account-row">
               <span class="data-label">Account email</span>
               <strong id="account-email-label" class="data-value">owner@sunveil.net</strong>
             </div>
             <div class="account-row">
               <span class="data-label">Server Capacity</span>
-              <span id="account-slots-label" class="data-value accent-text">1 of 4 Max Server Slots Active</span>
+              <span id="account-slots-label" class="data-value text-accent">1 of 4 Max Server Slots Active</span>
             </div>
             <div class="account-row">
               <span class="data-label">Device Security &amp; Anti-Alt Sentinel</span>
-              <span id="account-hwid-status" class="data-value" style="color: #38bdf8;">Verified Hardware Fingerprint Linked</span>
+              <span id="account-hwid-status" class="data-value" style="color: var(--status-info);">Verified Hardware Fingerprint Linked</span>
             </div>
             <div class="account-row">
               <span class="data-label">Session status</span>
@@ -962,6 +1075,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=6.3"></script>
+  <script src="/app.js?v=7.0"></script>
 </body>
 </html>
