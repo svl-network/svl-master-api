@@ -351,6 +351,7 @@ export interface ServerPayload {
   playerList?: (string | PlayerEntry)[] | undefined;
   ownerEmail?: string | undefined;
   slotIndex?: number | undefined;
+  isCustom?: boolean | undefined;
 }
 
 // Persistent Server Stores
@@ -953,15 +954,29 @@ fastify.get("/api/v1/servers", {
 
     const tunnel = relayServer.getTunnel(srv.serverKey);
     const isOnline = Boolean((srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)) || tunnel || srv.verified);
-    const resolvedIp = tunnel ? tunnel.publicHost : srv.ip;
-    const resolvedPort = tunnel ? tunnel.assignedPort : srv.port;
+    
+    // Privacy & Security: NEVER leak backend origin IP address in public endpoints.
+    // Always resolve to the Sunveil SNI relay hostname or active tunnel host.
+    const relayHost = `${srv.serverKey.toLowerCase().replace(/[^a-z0-9_-]/g, "")}.realms.sunveil.net`;
+    const resolvedIp = tunnel ? tunnel.publicHost : (srv.isCustom ? srv.ip : relayHost);
+    const resolvedPort = tunnel ? tunnel.assignedPort : (srv.isCustom ? srv.port : 25565);
     const onlinePlayers = isOnline ? (srv.status?.players !== undefined ? srv.status.players : (srv.playerList ? srv.playerList.length : 0)) : 0;
 
-    const enriched = {
-      ...srv,
+    const safePublicServer = {
+      serverKey: srv.serverKey,
+      name: srv.name,
+      icon: srv.icon,
       ip: resolvedIp,
       port: resolvedPort,
+      region: srv.region || "EU",
+      version: srv.version,
+      verified: Boolean(srv.verified),
+      boosts: srv.boosts || 0,
+      sponsored: Boolean(srv.sponsored),
+      bannerUrl: srv.bannerUrl || null,
+      links: srv.links || { store: "", discord: "", website: "" },
       online: isOnline,
+      isCustom: Boolean(srv.isCustom),
       modCount: srv.mods ? srv.mods.length : 0,
       tunnel: tunnel ? {
         active: true,
@@ -971,12 +986,13 @@ fastify.get("/api/v1/servers", {
         connectedAt: tunnel.connectedAt
       } : { active: false },
       status: {
-        ...srv.status,
         online: isOnline,
-        players: onlinePlayers
+        players: onlinePlayers,
+        maxPlayers: srv.status?.maxPlayers || 0,
+        motd: srv.status?.motd || ""
       }
     };
-    activeServers.push(enriched);
+    activeServers.push(safePublicServer);
   }
 
   return activeServers.sort((a, b) => {
@@ -1002,8 +1018,9 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
   }
 
   const tunnel = relayServer.getTunnel(srv.serverKey);
-  const resolvedIp = tunnel ? tunnel.publicHost : srv.ip;
-  const resolvedPort = tunnel ? tunnel.assignedPort : srv.port;
+  const relayHost = `${srv.serverKey.toLowerCase().replace(/[^a-z0-9_-]/g, "")}.realms.sunveil.net`;
+  const resolvedIp = tunnel ? tunnel.publicHost : (srv.isCustom ? srv.ip : relayHost);
+  const resolvedPort = tunnel ? tunnel.assignedPort : (srv.isCustom ? srv.port : 25565);
 
   return {
     serverKey: srv.serverKey,
