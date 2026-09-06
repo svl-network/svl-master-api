@@ -111,6 +111,26 @@ document.addEventListener("DOMContentLoaded", () => {
     closeAddSlotBtn.addEventListener("click", closeAddSlotModal);
   }
 
+  const closeLaunchBtn = document.getElementById("btn-close-launch-modal");
+  if (closeLaunchBtn) {
+    closeLaunchBtn.addEventListener("click", closeLaunchModal);
+  }
+
+  const doneLaunchBtn = document.getElementById("btn-done-launch");
+  if (doneLaunchBtn) {
+    doneLaunchBtn.addEventListener("click", closeLaunchModal);
+  }
+
+  const copyLaunchAddrBtn = document.getElementById("btn-copy-launch-address");
+  if (copyLaunchAddrBtn) {
+    copyLaunchAddrBtn.addEventListener("click", () => {
+      const addrEl = document.getElementById("launch-modal-address");
+      if (addrEl && addrEl.innerText) {
+        copyServerAddress(addrEl.innerText);
+      }
+    });
+  }
+
   // Modal Backdrop Click Dismissal
   const authModal = document.getElementById("auth-modal");
   if (authModal) {
@@ -130,6 +150,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if (addSlotModal) {
     addSlotModal.addEventListener("click", (e) => {
       if (e.target === addSlotModal) closeAddSlotModal();
+    });
+  }
+
+  const launchModal = document.getElementById("modal-launch-client");
+  if (launchModal) {
+    launchModal.addEventListener("click", (e) => {
+      if (e.target === launchModal) closeLaunchModal();
     });
   }
 
@@ -838,7 +865,7 @@ async function handleCreateServerSlot(event) {
     }
 
     closeAddSlotModal();
-    showToast(`🎉 New server instance '${data.server?.name || name}' created!`);
+    showToast(`New server instance '${data.server?.name || name}' created.`);
     fetchDashboardData(false);
   } catch (err) {
     if (alertBox) {
@@ -1166,18 +1193,23 @@ function renderPublicRealms() {
     const isOnline = server.online !== false;
     const playersOnline = server.status ? (server.status.players || 0) : 0;
     const maxPlayers = server.status ? (server.status.maxPlayers || 50) : 50;
-    const endpoint = server.ip ? (server.port && server.port !== 25565 ? `${server.ip}:${server.port}` : server.ip) : `${server.serverKey}.realms.sunveil.net`;
+    const host = server.ip || `${server.serverKey}.realms.sunveil.net`;
+    const port = server.port || 25565;
+    const endpoint = (port && port !== 25565) ? `${host}:${port}` : host;
     const engine = server.version || "Fabric 1.21.1";
     const modCount = server.modCount !== undefined ? server.modCount : (server.mods ? server.mods.length : 0);
+    const serverName = server.name || server.serverKey;
 
     return `
       <div class="realm-card">
         <div>
           <div class="realm-card-header">
             <div class="realm-card-title-group">
-              <div class="realm-icon">⚡</div>
+              <div class="realm-icon" style="padding: 4px;">
+                <img src="/icons/server.svg" width="28" height="28" alt="Server Node" style="display: block;">
+              </div>
               <div>
-                <h4 class="realm-name">${escapeHtml(server.name || server.serverKey)}</h4>
+                <h4 class="realm-name">${escapeHtml(serverName)}</h4>
                 <div class="realm-tags">
                   <span class="realm-tag">${escapeHtml(engine)}</span>
                   ${modCount > 0 ? `<span class="realm-tag">${modCount} mods synced</span>` : ""}
@@ -1203,16 +1235,50 @@ function renderPublicRealms() {
         </div>
 
         <div class="realm-card-footer">
-          <span style="font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono);">
-            👥 <strong>${playersOnline}</strong> / ${maxPlayers} Players
+          <span style="font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); display: inline-flex; align-items: center; gap: 4px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <strong>${playersOnline}</strong> / ${maxPlayers} Players
           </span>
-          <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-secondary btn-sm">
+          <button class="btn btn-primary btn-sm" onclick="handleLaunchClient('${escapeHtml(server.serverKey)}', '${escapeHtml(host)}', ${port}, '${escapeHtml(serverName)}')">
             Launch Client
-          </a>
+          </button>
         </div>
       </div>
     `;
   }).join("");
+}
+
+function handleLaunchClient(serverKey, host, port, name) {
+  const modal = document.getElementById("modal-launch-client");
+  const titleEl = document.getElementById("launch-modal-title");
+  const serverEl = document.getElementById("launch-modal-server");
+  const addrEl = document.getElementById("launch-modal-address");
+
+  const endpoint = (port && port !== 25565) ? `${host}:${port}` : host;
+
+  if (titleEl) titleEl.innerText = `Connect to ${name}`;
+  if (serverEl) serverEl.innerText = serverKey;
+  if (addrEl) addrEl.innerText = endpoint;
+
+  if (modal) modal.classList.remove("hidden");
+
+  // Attempt desktop protocol launch via registered custom URI scheme
+  try {
+    const customUri = `sunveil://connect?server=${encodeURIComponent(serverKey)}&host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`;
+    window.location.href = customUri;
+  } catch (e) {
+    console.log("Protocol launch invoked:", e);
+  }
+}
+
+function closeLaunchModal() {
+  const modal = document.getElementById("modal-launch-client");
+  if (modal) modal.classList.add("hidden");
 }
 
 function resetRealmFilters() {
@@ -1230,7 +1296,7 @@ function resetRealmFilters() {
 
 function copyServerAddress(addr) {
   navigator.clipboard.writeText(addr).then(() => {
-    showToast("Server address copied: " + addr);
+    showToast("Server address copied to clipboard.");
   }).catch(() => {
     showToast("Server address: " + addr);
   });
