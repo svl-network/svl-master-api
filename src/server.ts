@@ -1025,22 +1025,22 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
 fastify.get("/api/v1/updates/latest", async () => {
   return {
     client: {
-      version: "1.0.1",
+      version: "1.0.2",
       mandatory: false,
       url: "https://github.com/svl-network/svl-connect/releases/latest",
       downloadUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-windows-x64.zip",
       platforms: {
         windows: {
-          version: "1.0.1",
+          version: "1.0.2",
           installerUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-setup.exe",
           portableUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-windows-x64.zip"
         },
         linux: {
-          version: "1.0.1",
+          version: "1.0.2",
           appImageUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-linux-x86_64.AppImage"
         }
       },
-      changelog: "SVL Connect v1.0.1: Native Modrinth discovery, real-time SNI proxy relay integration, automatic mod hash delta synchronization, and hardware security perimeter."
+      changelog: "SVL Connect v1.0.2: In-app manual custom Minecraft server management, standalone instance generation and direct connection, Modrinth discovery, and encrypted relay performance upgrades."
     },
     bridge: {
       version: "2.1.0",
