@@ -1021,20 +1021,47 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
   };
 });
 
-// 8. Latest Updates Endpunkt
+// 8. Latest Updates & Auto-Updater Matrix
 fastify.get("/api/v1/updates/latest", async () => {
   return {
     client: {
       version: "1.0.1",
       mandatory: false,
       url: "https://github.com/svl-network/svl-connect/releases/latest",
-      changelog: "Includes Modrinth native discovery, delta synchronization, hardware fingerprinting, and real-time security badge system."
+      downloadUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-windows-x64.zip",
+      platforms: {
+        windows: {
+          version: "1.0.1",
+          installerUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-setup.exe",
+          portableUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-windows-x64.zip"
+        },
+        linux: {
+          version: "1.0.1",
+          appImageUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-linux-x86_64.AppImage"
+        }
+      },
+      changelog: "SVL Connect v1.0.1: Native Modrinth discovery, real-time SNI proxy relay integration, automatic mod hash delta synchronization, and hardware security perimeter."
     },
     bridge: {
       version: "2.1.0",
-      url: "https://github.com/svl-network/svl-bridge/releases/latest"
+      url: "https://github.com/svl-network/svl-bridge/releases/latest",
+      downloads: {
+        paper: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-paper-1.0.0.jar",
+        fabric: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-fabric-1.0.0.jar",
+        forge: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-forge-1.0.0.jar",
+        neoforge: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-neoforge-1.0.0.jar"
+      }
     }
   };
+});
+
+// Download Redirection Routes
+fastify.get("/download", async (_request, reply) => {
+  return reply.redirect("https://github.com/svl-network/svl-connect/releases/latest", 302);
+});
+
+fastify.get("/api/v1/download/launcher", async (_request, reply) => {
+  return reply.redirect("https://github.com/svl-network/svl-connect/releases/latest", 302);
 });
 
 // User JWT Authentication Pre-Handler
@@ -1483,6 +1510,121 @@ fastify.post<{ Body: { name?: string; serverKey?: string } }>("/api/v1/user/serv
   return {
     success: true,
     message: `Server slot '${finalKey}' created successfully!`,
+    serverKey: finalKey,
+    licenseKey: newLicenseKey,
+    usedSlots: currentKeys.length,
+    totalSlots: currentSlots
+  };
+});
+
+// 12b. Add / Register Custom Non-Bridge Minecraft Server
+fastify.post<{
+  Body: {
+    name: string;
+    ip: string;
+    port?: number;
+    minecraftVersion?: string;
+    loader?: string;
+    motd?: string;
+    serverKey?: string;
+  }
+}>("/api/v1/user/servers/custom", {
+  preHandler: [requireUserAuth]
+}, async (request, reply) => {
+  const user: User = (request as any).user;
+  const { name, ip, port, minecraftVersion, loader, motd, serverKey: requestedKey } = request.body || {};
+
+  if (!name || !ip) {
+    return reply.status(400).send({ statusCode: 400, error: "Bad Request", message: "Server name and IP address are required." });
+  }
+
+  const currentSlots = user.serverSlots || 1;
+  const currentKeys = user.serverKeys && user.serverKeys.length > 0 ? user.serverKeys : [user.serverKey];
+
+  if (currentKeys.length >= currentSlots || currentKeys.length >= 4) {
+    return reply.status(403).send({
+      statusCode: 403,
+      error: "Slot Limit Reached",
+      message: `You have reached your server slot limit (${currentKeys.length}/${currentSlots}). Upgrade your slots to add more servers.`
+    });
+  }
+
+  let finalKey = "";
+  if (requestedKey && requestedKey.trim()) {
+    const cleanKey = requestedKey.trim().toLowerCase();
+    const validation = validateSubdomainOrKey(cleanKey);
+    if (!validation.valid) {
+      return reply.status(400).send({ statusCode: 400, error: "Invalid Key", message: validation.error });
+    }
+    if (isServerKeyClaimed(cleanKey, user.id)) {
+      return reply.status(409).send({ statusCode: 409, error: "Conflict", message: `Key '${cleanKey}' is already taken.` });
+    }
+    finalKey = cleanKey;
+  } else {
+    finalKey = "custom_" + crypto.randomBytes(6).toString("hex");
+  }
+
+  const safeName = sanitizeString(name, 64);
+  const safeIp = sanitizeString(ip, 128);
+  const safePort = Number(port) || 25565;
+  const safeMcVersion = sanitizeString(minecraftVersion || "1.21.1", 32);
+  const safeLoader = sanitizeString(loader || "vanilla", 32);
+  const safeMotd = sanitizeString(motd || `${safeName} - Custom Minecraft Server`, 128);
+  const newLicenseKey = generateLicenseKey(user.sponsored ? "SPONSOR" : "FREE");
+
+  // Create license
+  licenseStore.set(newLicenseKey, {
+    licenseKey: newLicenseKey,
+    tier: user.sponsored ? "SPONSOR" : "FREE",
+    ownerEmail: user.email,
+    serverKey: finalKey,
+    status: "active",
+    createdAt: Date.now(),
+    notes: `Custom standalone server registered by ${user.email}`
+  });
+
+  // Create server entry with active state
+  serverStore.set(finalKey, {
+    serverKey: finalKey,
+    name: safeName,
+    ip: safeIp,
+    port: safePort,
+    version: {
+      minecraft: safeMcVersion,
+      loader: safeLoader,
+      loaderVersion: `${safeMcVersion}-custom`
+    },
+    status: {
+      players: 0,
+      maxPlayers: 50,
+      motd: safeMotd
+    },
+    mods: [],
+    lastHeartbeat: Date.now(),
+    verified: false,
+    boosts: 0,
+    sponsored: user.sponsored,
+    bannerUrl: null,
+    links: { store: "", discord: "", website: "" },
+    ownerEmail: user.email,
+    slotIndex: currentKeys.length + 1
+  });
+
+  serverOwnerStore.set(finalKey, hashToken(newLicenseKey));
+
+  currentKeys.push(finalKey);
+  user.serverKeys = currentKeys;
+  user.serverKey = finalKey;
+
+  saveDatabaseToDisk();
+  saveLicensesToDisk();
+  saveServersToDisk();
+
+  logAdminAction("CUSTOM_SERVER_ADDED", finalKey, user.email, request.ip, `Registered custom server ${safeIp}:${safePort}`);
+
+  return {
+    success: true,
+    message: `Custom server '${safeName}' added successfully to your fleet!`,
     serverKey: finalKey,
     licenseKey: newLicenseKey,
     usedSlots: currentKeys.length,

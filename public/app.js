@@ -88,6 +88,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  document.querySelectorAll('[data-action="open-download"]').forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      openDownloadModal();
+    });
+  });
+
   document.querySelectorAll('[data-action="logout"]').forEach(el => {
     el.addEventListener("click", (e) => {
       e.preventDefault();
@@ -109,6 +116,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeAddSlotBtn = document.getElementById("btn-close-add-slot-modal");
   if (closeAddSlotBtn) {
     closeAddSlotBtn.addEventListener("click", closeAddSlotModal);
+  }
+
+  const closeCustomServerBtn = document.getElementById("btn-close-custom-server-modal");
+  if (closeCustomServerBtn) {
+    closeCustomServerBtn.addEventListener("click", closeCustomServerModal);
+  }
+
+  const closeDownloadBtn = document.getElementById("btn-close-download-modal");
+  if (closeDownloadBtn) {
+    closeDownloadBtn.addEventListener("click", closeDownloadModal);
   }
 
   const closeLaunchBtn = document.getElementById("btn-close-launch-modal");
@@ -153,6 +170,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  const customServerModal = document.getElementById("modal-add-custom-server");
+  if (customServerModal) {
+    customServerModal.addEventListener("click", (e) => {
+      if (e.target === customServerModal) closeCustomServerModal();
+    });
+  }
+
+  const downloadModal = document.getElementById("modal-download-launcher");
+  if (downloadModal) {
+    downloadModal.addEventListener("click", (e) => {
+      if (e.target === downloadModal) closeDownloadModal();
+    });
+  }
+
   const launchModal = document.getElementById("modal-launch-client");
   if (launchModal) {
     launchModal.addEventListener("click", (e) => {
@@ -160,7 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Add Server Slot Modal Triggers
+  // Add Server Slot & Custom Server Modal Triggers
   const openAddSlotBtn = document.getElementById("btn-add-server-slot");
   if (openAddSlotBtn) {
     openAddSlotBtn.addEventListener("click", openAddSlotModal);
@@ -169,6 +200,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const formAddSlot = document.getElementById("form-add-server-slot");
   if (formAddSlot) {
     formAddSlot.addEventListener("submit", handleCreateServerSlot);
+  }
+
+  const formAddCustomServer = document.getElementById("form-add-custom-server");
+  if (formAddCustomServer) {
+    formAddCustomServer.addEventListener("submit", handleCreateCustomServer);
   }
 
   // Auth Tabs
@@ -317,6 +353,43 @@ function openAddSlotModal() {
 
 function closeAddSlotModal() {
   const modal = document.getElementById("modal-add-server-slot");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openCustomServerModal() {
+  const modal = document.getElementById("modal-add-custom-server");
+  if (modal) {
+    const alertBox = document.getElementById("add-custom-server-alert");
+    if (alertBox) {
+      alertBox.classList.add("hidden");
+      alertBox.innerText = "";
+    }
+    const nameInput = document.getElementById("input-custom-server-name");
+    const ipInput = document.getElementById("input-custom-server-ip");
+    const portInput = document.getElementById("input-custom-server-port");
+    const motdInput = document.getElementById("input-custom-server-motd");
+    const keyInput = document.getElementById("input-custom-server-key");
+    if (nameInput) nameInput.value = "";
+    if (ipInput) ipInput.value = "";
+    if (portInput) portInput.value = "25565";
+    if (motdInput) motdInput.value = "";
+    if (keyInput) keyInput.value = "";
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeCustomServerModal() {
+  const modal = document.getElementById("modal-add-custom-server");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openDownloadModal() {
+  const modal = document.getElementById("modal-download-launcher");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeDownloadModal() {
+  const modal = document.getElementById("modal-download-launcher");
   if (modal) modal.classList.add("hidden");
 }
 
@@ -600,9 +673,19 @@ function renderDashboard(data) {
       const addTabBtn = document.createElement("button");
       addTabBtn.className = "btn btn-secondary btn-sm";
       addTabBtn.style.borderStyle = "dashed";
-      addTabBtn.innerText = "➕ New Slot";
+      addTabBtn.innerText = "➕ Bridge Slot";
+      addTabBtn.title = "Deploy slot for SVL-Bridge plugin";
       addTabBtn.addEventListener("click", openAddSlotModal);
       slotsTabsContainer.appendChild(addTabBtn);
+
+      const addCustomBtn = document.createElement("button");
+      addCustomBtn.className = "btn btn-secondary btn-sm";
+      addCustomBtn.style.borderStyle = "dashed";
+      addCustomBtn.style.color = "var(--accent-primary)";
+      addCustomBtn.innerText = "🌐 Custom Server";
+      addCustomBtn.title = "Add vanilla or external standalone server without plugin";
+      addCustomBtn.addEventListener("click", openCustomServerModal);
+      slotsTabsContainer.appendChild(addCustomBtn);
     }
   }
 
@@ -877,6 +960,79 @@ async function handleCreateServerSlot(event) {
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerText = "Deploy Server Instance";
+    }
+  }
+}
+
+// Handle Custom Non-Bridge Minecraft Server Addition
+async function handleCreateCustomServer(event) {
+  event.preventDefault();
+
+  const alertBox = document.getElementById("add-custom-server-alert");
+  const submitBtn = document.getElementById("btn-submit-custom-server");
+  const nameInput = document.getElementById("input-custom-server-name");
+  const ipInput = document.getElementById("input-custom-server-ip");
+  const portInput = document.getElementById("input-custom-server-port");
+  const versionInput = document.getElementById("input-custom-server-version");
+  const loaderInput = document.getElementById("input-custom-server-loader");
+  const motdInput = document.getElementById("input-custom-server-motd");
+  const keyInput = document.getElementById("input-custom-server-key");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  const ip = ipInput ? ipInput.value.trim() : "";
+  const port = portInput ? Number(portInput.value) || 25565 : 25565;
+  const minecraftVersion = versionInput ? versionInput.value.trim() : "1.21.1";
+  const loader = loaderInput ? loaderInput.value : "vanilla";
+  const motd = motdInput ? motdInput.value.trim() : "";
+  const serverKey = keyInput ? keyInput.value.trim() : "";
+
+  if (alertBox) alertBox.classList.add("hidden");
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Registering Server...";
+  }
+
+  try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch("/api/v1/user/servers/custom", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        ip,
+        port,
+        minecraftVersion,
+        loader,
+        motd,
+        serverKey
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "Failed to register custom server.");
+    }
+
+    closeCustomServerModal();
+    showToast(`Custom server '${name}' registered successfully!`);
+    fetchDashboardData(false);
+  } catch (err) {
+    if (alertBox) {
+      alertBox.innerText = err.message || "Could not register custom server.";
+      alertBox.className = "alert-box alert-error";
+      alertBox.classList.remove("hidden");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "➕ Register Custom Server";
     }
   }
 }

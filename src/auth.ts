@@ -104,7 +104,7 @@ export interface User {
   tosAgreedAt?: number | undefined;
   tosAgreedIp?: string | undefined;
   antiMalwareAffirmed?: boolean | undefined;
-  
+
   // Hardware Fingerprint & Trust Score Metrics
   hwid?: string | undefined;
   ipHistory?: string[] | undefined;
@@ -635,7 +635,7 @@ export const unblockAdminIp = (ip: string): boolean => {
  */
 export const verifyAdminSecret = (providedSecret: string): boolean => {
   if (!providedSecret || typeof providedSecret !== "string") return false;
-  
+
   const validSecrets = [
     process.env.ADMIN_SECRET_KEY,
     process.env.MASTER_API_TOKEN,
@@ -839,11 +839,11 @@ export const seedDemoUser = () => {
 export const findUserByIdentifier = (identifier: string): User | undefined => {
   if (!identifier || typeof identifier !== "string") return undefined;
   const clean = identifier.trim().toLowerCase();
-  
+
   if (userStore.has(clean)) {
     return userStore.get(clean);
   }
-  
+
   for (const user of userStore.values()) {
     if (
       (user.email && user.email.toLowerCase() === clean) ||

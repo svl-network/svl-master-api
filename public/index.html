@@ -89,7 +89,7 @@
           <button id="btn-open-auth" class="btn btn-secondary btn-sm" data-action="open-login">
             Sign In
           </button>
-          <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-primary btn-sm">
+          <a href="/download" class="btn btn-primary btn-sm" data-action="open-download">
             Download Client
           </a>
         </div>
@@ -133,7 +133,7 @@
             </p>
 
             <div class="hero-actions">
-              <a href="https://github.com/svl-network/svl-connect/releases/latest" class="btn btn-primary btn-lg">
+              <a href="/download" class="btn btn-primary btn-lg" data-action="open-download">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
@@ -1146,6 +1146,151 @@
           <button id="btn-done-launch" class="btn btn-secondary btn-sm" style="min-width: 80px;">
             Done
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 5: ADD CUSTOM NON-BRIDGE SERVER
+       ========================================================================= -->
+  <div id="modal-add-custom-server" class="modal-backdrop hidden">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">Add Custom Minecraft Server</h3>
+          <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">Connect any standalone or vanilla server without the bridge plugin.</p>
+        </div>
+        <button id="btn-close-custom-server-modal" class="modal-close">✕</button>
+      </div>
+      <form id="form-add-custom-server" class="modal-body">
+        <div id="add-custom-server-alert" class="alert-box hidden"></div>
+
+        <div class="form-field">
+          <label for="input-custom-server-name" class="form-label">Server Name *</label>
+          <input type="text" id="input-custom-server-name" class="form-input" placeholder="e.g. Hypixel Network or Survival SMP" required maxlength="64">
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="input-custom-server-ip" class="form-label">Host / IP Address *</label>
+            <input type="text" id="input-custom-server-ip" class="form-input" placeholder="e.g. mc.example.com" required maxlength="128">
+          </div>
+          <div class="form-field">
+            <label for="input-custom-server-port" class="form-label">Port</label>
+            <input type="number" id="input-custom-server-port" class="form-input" placeholder="25565" value="25565" min="1" max="65535">
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="input-custom-server-version" class="form-label">Minecraft Version</label>
+            <input type="text" id="input-custom-server-version" class="form-input" placeholder="1.21.1" value="1.21.1" maxlength="32">
+          </div>
+          <div class="form-field">
+            <label for="input-custom-server-loader" class="form-label">Server Flavor</label>
+            <select id="input-custom-server-loader" class="form-input" style="cursor: pointer;">
+              <option value="vanilla">Vanilla</option>
+              <option value="paper" selected>Paper / Purpur</option>
+              <option value="fabric">Fabric</option>
+              <option value="forge">Forge</option>
+              <option value="neoforge">NeoForge</option>
+              <option value="velocity">Velocity / Bungee</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="input-custom-server-motd" class="form-label">MOTD / Tagline</label>
+          <input type="text" id="input-custom-server-motd" class="form-input" placeholder="Official Community Minecraft Realm" maxlength="128">
+        </div>
+
+        <div class="form-field">
+          <label for="input-custom-server-key" class="form-label">Custom Subdomain / Key (Optional)</label>
+          <input type="text" id="input-custom-server-key" class="form-input" placeholder="e.g. community-hub" maxlength="32">
+          <span class="form-help">Unique handle for direct connection routing.</span>
+        </div>
+
+        <button type="submit" id="btn-submit-custom-server" class="btn btn-primary btn-block" style="margin-top: 14px; font-weight: 700;">
+          ➕ Register Custom Server
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 6: DOWNLOAD SVL CONNECT LAUNCHER
+       ========================================================================= -->
+  <div id="modal-download-launcher" class="modal-backdrop hidden">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="brand-mark-box" style="width: 38px; height: 38px;">
+            <img src="/icons/sunveil-logo.svg" alt="Sunveil" width="22" height="22">
+          </div>
+          <div>
+            <h3 class="modal-title">Get Sunveil Connect</h3>
+            <span class="badge badge-subtle" style="font-size: 11px; color: var(--accent-primary);">v1.0.1 • Windows &amp; Linux</span>
+          </div>
+        </div>
+        <button id="btn-close-download-modal" class="modal-close">✕</button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: var(--space-4);">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+          Experience instant zero-portforwarding multiplayer, automatic client mod delta synchronization, and anti-tamper security directly on your desktop.
+        </p>
+
+        <!-- Windows Primary -->
+        <div class="panel" style="background: var(--color-surface-2); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px;">
+          <div class="flex-between">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">🪟</span>
+              <div>
+                <strong style="font-size: 14px; color: var(--text-primary); display: block;">Windows 10 / 11 (64-bit)</strong>
+                <span style="font-size: 11px; color: var(--text-secondary);">Direct Installer (.exe) &amp; Portable (.zip)</span>
+              </div>
+            </div>
+            <span class="status-badge status-online">Recommended</span>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+            <a href="https://github.com/svl-network/svl-connect/releases/latest" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="font-weight: 700;">
+              ⬇️ Download Windows Installer (.exe)
+            </a>
+            <a href="https://github.com/svl-network/svl-connect/releases/latest" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+              📦 Portable ZIP
+            </a>
+          </div>
+        </div>
+
+        <!-- Linux / Others -->
+        <div class="panel" style="background: var(--color-surface-2); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px;">
+          <div class="flex-between">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">🐧</span>
+              <div>
+                <strong style="font-size: 14px; color: var(--text-primary); display: block;">Linux / SteamDeck</strong>
+                <span style="font-size: 11px; color: var(--text-secondary);">AppImage &amp; Tarball packages</span>
+              </div>
+            </div>
+            <span class="badge badge-subtle">Universal</span>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+            <a href="https://github.com/svl-network/svl-connect/releases/latest" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+              ⬇️ Linux AppImage (x86_64)
+            </a>
+            <a href="https://github.com/svl-network/svl-connect/releases/latest" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
+              View All Releases on GitHub ↗
+            </a>
+          </div>
+        </div>
+
+        <!-- Features list -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: var(--text-secondary);">
+          <div>✨ Real-time mod &amp; config sync</div>
+          <div>🛡️ Zero port-forwarding relay</div>
+          <div>⚡ Modrinth native edge mirror</div>
+          <div>🔒 SHA-256 hardware perimeter</div>
         </div>
       </div>
     </div>
