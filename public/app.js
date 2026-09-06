@@ -1282,44 +1282,7 @@ async function fetchPublicRealms() {
 }
 
 function getFallbackRealms() {
-  return [
-    {
-      name: "Sunveil SMP Network Official",
-      serverKey: "svl_demo_realm",
-      ip: "play.sunveil.net",
-      port: 25565,
-      version: "Forge 1.21.1",
-      online: true,
-      modCount: 13,
-      boosts: 25,
-      sponsored: true,
-      status: { online: true, players: 42, maxPlayers: 100 }
-    },
-    {
-      name: "Sunveil Vanilla+ Survival",
-      serverKey: "svl_community_realm",
-      ip: "play.sunveil.net",
-      port: 25565,
-      version: "Fabric 1.21.1",
-      online: true,
-      modCount: 0,
-      boosts: 12,
-      sponsored: false,
-      status: { online: true, players: 28, maxPlayers: 60 }
-    },
-    {
-      name: "Sunveil Bedrock & Crossplay Gateway",
-      serverKey: "sunveil_crossplay",
-      ip: "bedrock.sunveil.net",
-      port: 6197,
-      version: "Paper 1.21.1",
-      online: true,
-      modCount: 0,
-      boosts: 6,
-      sponsored: false,
-      status: { online: true, players: 19, maxPlayers: 50 }
-    }
-  ];
+  return [];
 }
 
 function renderPublicRealms() {
