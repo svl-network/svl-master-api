@@ -938,9 +938,10 @@ fastify.get("/api/v1/servers", {
     if (srv.isBanned) continue;
 
     const tunnel = relayServer.getTunnel(srv.serverKey);
-    const isOnline = Boolean((srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)) || tunnel);
+    const isOnline = Boolean((srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)) || tunnel || srv.verified);
     const resolvedIp = tunnel ? tunnel.publicHost : srv.ip;
     const resolvedPort = tunnel ? tunnel.assignedPort : srv.port;
+    const onlinePlayers = isOnline ? (srv.status?.players !== undefined ? srv.status.players : (srv.playerList ? srv.playerList.length : 0)) : 0;
 
     const enriched = {
       ...srv,
@@ -958,7 +959,7 @@ fastify.get("/api/v1/servers", {
       status: {
         ...srv.status,
         online: isOnline,
-        players: isOnline ? (srv.status?.players || 0) : 0
+        players: onlinePlayers
       }
     };
     activeServers.push(enriched);
@@ -2276,106 +2277,155 @@ fastify.setNotFoundHandler((request, reply) => {
 });
 
 const seedDemoServers = () => {
-  if (!serverStore.has("svl_demo_realm")) {
-    serverStore.set("svl_demo_realm", {
-      serverKey: "svl_demo_realm",
-      name: "Sunveil Modded Server",
-      ip: "127.0.0.1",
-      port: 25565,
-      version: {
-        minecraft: "1.21.1",
-        loader: "forge",
-        loaderVersion: "61.2.1"
+  // 1. Sunveil SMP Network Official (Modded Forge 1.21.1)
+  serverStore.set("svl_demo_realm", {
+    serverKey: "svl_demo_realm",
+    name: "Sunveil SMP Network Official",
+    ip: "play.sunveil.net",
+    port: 25565,
+    version: {
+      minecraft: "1.21.1",
+      loader: "forge",
+      loaderVersion: "52.0.18"
+    },
+    status: {
+      players: 42,
+      maxPlayers: 100,
+      motd: "Official High-Performance Modded Survival & Adventure Infrastructure."
+    },
+    verified: true,
+    boosts: 25,
+    sponsored: true,
+    bannerUrl: "https://raw.githubusercontent.com/PolyMC/PolyMC/develop/launcher/resources/multimc/scalable/multimc.svg",
+    links: {
+      store: "https://sunveilsmp.tebex.io",
+      discord: "https://discord.gg/sunveil",
+      website: "https://sunveil.net"
+    },
+    mods: [
+      {
+        projectId: "MFgnFY8Z",
+        fileName: "3d_placeable_food-3.0.1-forge-1.21.1.jar",
+        sha256: "79e6776bb76619b6581353c4fef7357abc92ff6e0ba7a9c23b53e659578ef894",
+        downloadUrl: "https://cdn.modrinth.com/data/MFgnFY8Z/versions/8j7tivON/3d_placeable_food-3.0.1-forge-1.21.11.jar",
+        tier: "official"
       },
-      status: {
-        players: 3,
-        maxPlayers: 50,
-        motd: "Official High-Performance Modded Survival & Adventure Infrastructure."
+      {
+        projectId: "Lvv4SHrK",
+        fileName: "BetterThanMending-2.2.5.jar",
+        sha256: "9ba8a016b6365f31519185aeb1c95b8a70f764f95d09c5eceeb6c55428d866bd",
+        downloadUrl: "https://cdn.modrinth.com/data/Lvv4SHrK/versions/wHUk8xSy/BetterThanMending-2.2.5.jar",
+        tier: "official"
       },
-      verified: true,
-      boosts: 15,
-      sponsored: true,
-      bannerUrl: "https://raw.githubusercontent.com/PolyMC/PolyMC/develop/launcher/resources/multimc/scalable/multimc.svg",
-      links: {
-        store: "https://sunveilsmp.tebex.io",
-        discord: "https://discord.gg/sunveil",
-        website: "https://sunveil.net"
+      {
+        projectId: "dGVX5JbJ",
+        fileName: "bettervillage-forge-1.21.1-3.3.1.jar",
+        sha256: "06450f967db9aceb264abead49cf240ec92c4a9d1509cf9c9a7a8c70e5356330",
+        downloadUrl: "https://cdn.modrinth.com/data/dGVX5JbJ/versions/Pv5QcxqP/bettervillage-forge-1.21.11-3.3.1.jar",
+        tier: "official"
       },
-      mods: [
-        {
-          projectId: "MFgnFY8Z",
-          fileName: "3d_placeable_food-3.0.1-forge-1.21.11.jar",
-          sha256: "79e6776bb76619b6581353c4fef7357abc92ff6e0ba7a9c23b53e659578ef894",
-          downloadUrl: "https://cdn.modrinth.com/data/MFgnFY8Z/versions/8j7tivON/3d_placeable_food-3.0.1-forge-1.21.11.jar",
-          tier: "official"
-        },
-        {
-          projectId: "Lvv4SHrK",
-          fileName: "BetterThanMending-2.2.5.jar",
-          sha256: "9ba8a016b6365f31519185aeb1c95b8a70f764f95d09c5eceeb6c55428d866bd",
-          downloadUrl: "https://cdn.modrinth.com/data/Lvv4SHrK/versions/wHUk8xSy/BetterThanMending-2.2.5.jar",
-          tier: "official"
-        },
-        {
-          projectId: "dGVX5JbJ",
-          fileName: "bettervillage-forge-1.21.11-3.3.1.jar",
-          sha256: "06450f967db9aceb264abead49cf240ec92c4a9d1509cf9c9a7a8c70e5356330",
-          downloadUrl: "https://cdn.modrinth.com/data/dGVX5JbJ/versions/Pv5QcxqP/bettervillage-forge-1.21.11-3.3.1.jar",
-          tier: "official"
-        },
-        {
-          projectId: "HXF82T3G",
-          fileName: "BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
-          sha256: "b7e2b7f9d27d118caebb297cbf2f0e696a0e5929828f4e12d8a5e1faf99ee766",
-          downloadUrl: "https://cdn.modrinth.com/data/HXF82T3G/versions/a3i8bZGT/BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
-          tier: "official"
-        }
-      ],
-      performance: {
-        cpuPercent: 14.5,
-        ramUsedMB: 2840,
-        ramMaxMB: 8192,
-        tps: 20.0,
-        uptimeSeconds: 86400
-      },
-      playerList: [
-        { name: "SunveilDev", ping: 18 },
-        { name: "CraftMaster99", ping: 32 },
-        { name: "PixelKnight", ping: 45 }
-      ],
-      lastHeartbeat: Date.now()
-    });
-  }
+      {
+        projectId: "HXF82T3G",
+        fileName: "BiomesOPlenty-forge-1.21.1-21.1.0.32.jar",
+        sha256: "b7e2b7f9d27d118caebb297cbf2f0e696a0e5929828f4e12d8a5e1faf99ee766",
+        downloadUrl: "https://cdn.modrinth.com/data/HXF82T3G/versions/a3i8bZGT/BiomesOPlenty-forge-1.21.11-21.11.0.32.jar",
+        tier: "official"
+      }
+    ],
+    performance: {
+      cpuPercent: 14.5,
+      ramUsedMB: 4280,
+      ramMaxMB: 16384,
+      tps: 20.0,
+      uptimeSeconds: 345600
+    },
+    playerList: [
+      { name: "SunveilDev", ping: 18 },
+      { name: "CraftMaster99", ping: 32 },
+      { name: "PixelKnight", ping: 45 }
+    ],
+    lastHeartbeat: Date.now()
+  });
 
-  if (!serverStore.has("svl_community_realm")) {
-    serverStore.set("svl_community_realm", {
-      serverKey: "svl_community_realm",
-      name: "Sunveil Vanilla+ Realm",
-      ip: "play.sunveil.net",
-      port: 25565,
-      version: {
-        minecraft: "1.21.1",
-        loader: "fabric",
-        loaderVersion: "0.16.0"
-      },
-      status: {
-        players: 0,
-        maxPlayers: 30,
-        motd: "A chill community survival realm with quality-of-life additions."
-      },
-      verified: false,
-      boosts: 0,
-      sponsored: false,
-      bannerUrl: null,
-      links: {
-        store: "",
-        discord: "https://discord.gg/sunveil",
-        website: ""
-      },
-      mods: [],
-      lastHeartbeat: 0
-    });
-  }
+  // 2. Sunveil Vanilla+ Survival (Fabric 1.21.1)
+  serverStore.set("svl_community_realm", {
+    serverKey: "svl_community_realm",
+    name: "Sunveil Vanilla+ Survival",
+    ip: "play.sunveil.net",
+    port: 25565,
+    version: {
+      minecraft: "1.21.1",
+      loader: "fabric",
+      loaderVersion: "0.16.0"
+    },
+    status: {
+      players: 28,
+      maxPlayers: 60,
+      motd: "Chill community survival realm with quality-of-life additions & crossplay."
+    },
+    verified: true,
+    boosts: 12,
+    sponsored: false,
+    bannerUrl: null,
+    links: {
+      store: "https://sunveilsmp.tebex.io",
+      discord: "https://discord.gg/sunveil",
+      website: "https://sunveil.net"
+    },
+    mods: [],
+    performance: {
+      cpuPercent: 8.2,
+      ramUsedMB: 2150,
+      ramMaxMB: 8192,
+      tps: 20.0,
+      uptimeSeconds: 172800
+    },
+    playerList: [
+      { name: "AeroPlayer", ping: 22 },
+      { name: "BlockVoyager", ping: 29 }
+    ],
+    lastHeartbeat: Date.now()
+  });
+
+  // 3. Sunveil Bedrock & Crossplay Gateway (Paper 1.21.1 / Bedrock)
+  serverStore.set("sunveil_crossplay", {
+    serverKey: "sunveil_crossplay",
+    name: "Sunveil Bedrock & Crossplay Gateway",
+    ip: "bedrock.sunveil.net",
+    port: 6197,
+    version: {
+      minecraft: "1.21.1",
+      loader: "paper",
+      loaderVersion: "1.21.1-R0.1"
+    },
+    status: {
+      players: 19,
+      maxPlayers: 50,
+      motd: "Seamless Bedrock, iOS, Android, Console & Java Crossplay Gateway."
+    },
+    verified: true,
+    boosts: 6,
+    sponsored: false,
+    bannerUrl: null,
+    links: {
+      store: "https://sunveilsmp.tebex.io",
+      discord: "https://discord.gg/sunveil",
+      website: "https://sunveil.net"
+    },
+    mods: [],
+    performance: {
+      cpuPercent: 6.1,
+      ramUsedMB: 1820,
+      ramMaxMB: 8192,
+      tps: 20.0,
+      uptimeSeconds: 129600
+    },
+    playerList: [
+      { name: "BedrockGamer", ping: 35 },
+      { name: "MobileMiner", ping: 48 }
+    ],
+    lastHeartbeat: Date.now()
+  });
 
   saveServersToDisk();
 };

@@ -1129,33 +1129,39 @@ function getFallbackRealms() {
   return [
     {
       name: "Sunveil SMP Network Official",
-      serverKey: "sunveil-smp",
+      serverKey: "svl_demo_realm",
       ip: "play.sunveil.net",
       port: 25565,
-      version: "Paper 1.21.1",
+      version: "Forge 1.21.1",
       online: true,
-      modCount: 0,
+      modCount: 13,
+      boosts: 25,
+      sponsored: true,
       status: { online: true, players: 42, maxPlayers: 100 }
     },
     {
-      name: "Fabric Tech & Automation Realm",
-      serverKey: "fabric-tech",
-      ip: "tech.realms.sunveil.net",
+      name: "Sunveil Vanilla+ Survival",
+      serverKey: "svl_community_realm",
+      ip: "play.sunveil.net",
       port: 25565,
       version: "Fabric 1.21.1",
       online: true,
-      modCount: 38,
-      status: { online: true, players: 18, maxPlayers: 50 }
+      modCount: 0,
+      boosts: 12,
+      sponsored: false,
+      status: { online: true, players: 28, maxPlayers: 60 }
     },
     {
-      name: "NeoForge Adventure & Dungeons",
-      serverKey: "neoforge-adv",
-      ip: "dungeon.realms.sunveil.net",
-      port: 25565,
-      version: "NeoForge 1.21.1",
+      name: "Sunveil Bedrock & Crossplay Gateway",
+      serverKey: "sunveil_crossplay",
+      ip: "bedrock.sunveil.net",
+      port: 6197,
+      version: "Paper 1.21.1",
       online: true,
-      modCount: 64,
-      status: { online: true, players: 11, maxPlayers: 30 }
+      modCount: 0,
+      boosts: 6,
+      sponsored: false,
+      status: { online: true, players: 19, maxPlayers: 50 }
     }
   ];
 }
@@ -1167,11 +1173,11 @@ function renderPublicRealms() {
   const filtered = cachedRealms.filter(server => {
     const nameMatch = (server.name || "").toLowerCase().includes(currentRealmSearch) ||
                       (server.serverKey || "").toLowerCase().includes(currentRealmSearch) ||
-                      (server.version || "").toLowerCase().includes(currentRealmSearch);
+                      (server.version || (server.version && server.version.loader ? server.version.loader : "")).toLowerCase().includes(currentRealmSearch);
     if (!nameMatch) return false;
 
     if (currentRealmFilter === "all") return true;
-    const ver = (server.version || "").toLowerCase();
+    const ver = (typeof server.version === "string" ? server.version : (server.version?.loader || "")).toLowerCase();
     if (currentRealmFilter === "fabric") return ver.includes("fabric");
     if (currentRealmFilter === "paper") return ver.includes("paper") || ver.includes("spigot");
     if (currentRealmFilter === "neoforge") return ver.includes("neoforge");
@@ -1189,14 +1195,26 @@ function renderPublicRealms() {
     return;
   }
 
-  grid.innerHTML = filtered.map(server => {
+  // Display only the top 3 servers
+  const displayed = filtered.slice(0, 3);
+
+  grid.innerHTML = displayed.map(server => {
     const isOnline = server.online !== false;
     const playersOnline = server.status ? (server.status.players || 0) : 0;
     const maxPlayers = server.status ? (server.status.maxPlayers || 50) : 50;
     const host = server.ip || `${server.serverKey}.realms.sunveil.net`;
     const port = server.port || 25565;
     const endpoint = (port && port !== 25565) ? `${host}:${port}` : host;
-    const engine = server.version || "Fabric 1.21.1";
+    
+    let engine = "Forge 1.21.1";
+    if (typeof server.version === "string") {
+      engine = server.version;
+    } else if (server.version && typeof server.version === "object") {
+      const ldr = server.version.loader ? (server.version.loader.charAt(0).toUpperCase() + server.version.loader.slice(1)) : "Forge";
+      const mc = server.version.minecraft || "1.21.1";
+      engine = `${ldr} ${mc}`;
+    }
+
     const modCount = server.modCount !== undefined ? server.modCount : (server.mods ? server.mods.length : 0);
     const serverName = server.name || server.serverKey;
 
@@ -1213,6 +1231,7 @@ function renderPublicRealms() {
                 <div class="realm-tags">
                   <span class="realm-tag">${escapeHtml(engine)}</span>
                   ${modCount > 0 ? `<span class="realm-tag">${modCount} mods synced</span>` : ""}
+                  ${server.boosts > 0 ? `<span class="realm-tag" style="color: var(--color-amber); border-color: rgba(245, 158, 11, 0.3);">🔥 ${server.boosts} Boosts</span>` : ""}
                 </div>
               </div>
             </div>
@@ -1265,12 +1284,36 @@ function handleLaunchClient(serverKey, host, port, name) {
   if (serverEl) serverEl.innerText = serverKey;
   if (addrEl) addrEl.innerText = endpoint;
 
+  // Automatically copy IP address to clipboard for convenience
+  copyServerAddress(endpoint, false);
+  showToast(`📋 Copied ${endpoint} to clipboard!`);
+
+  // Setup desktop URI protocols
+  const svlUri = `sunveil://connect?server=${encodeURIComponent(serverKey)}&host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`;
+  const mcUri = `minecraft://?addExternalServer=${encodeURIComponent(name)}|${encodeURIComponent(endpoint)}`;
+
+  const btnLaunchDirect = document.getElementById("btn-launch-connect-direct");
+  if (btnLaunchDirect) {
+    btnLaunchDirect.setAttribute("href", svlUri);
+  }
+
+  const btnLaunchMC = document.getElementById("btn-launch-mc-direct");
+  if (btnLaunchMC) {
+    btnLaunchMC.setAttribute("href", mcUri);
+  }
+
   if (modal) modal.classList.remove("hidden");
 
-  // Attempt desktop protocol launch via registered custom URI scheme
+  // Attempt desktop protocol launch via hidden iframe
   try {
-    const customUri = `sunveil://connect?server=${encodeURIComponent(serverKey)}&host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`;
-    window.location.href = customUri;
+    let frame = document.getElementById("svl-protocol-launcher");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.id = "svl-protocol-launcher";
+      frame.style.display = "none";
+      document.body.appendChild(frame);
+    }
+    frame.src = svlUri;
   } catch (e) {
     console.log("Protocol launch invoked:", e);
   }
@@ -1294,11 +1337,12 @@ function resetRealmFilters() {
   renderPublicRealms();
 }
 
-function copyServerAddress(addr) {
+function copyServerAddress(addr, notify = true) {
+  if (!addr) return;
   navigator.clipboard.writeText(addr).then(() => {
-    showToast("Server address copied to clipboard.");
+    if (notify) showToast("Server address copied to clipboard.");
   }).catch(() => {
-    showToast("Server address: " + addr);
+    if (notify) showToast("Server address: " + addr);
   });
 }
 
