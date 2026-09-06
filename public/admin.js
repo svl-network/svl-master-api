@@ -16,6 +16,16 @@ let globalLicenses = [];
 let globalAuditLogs = [];
 let autoRefreshTimer = null;
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initAdminApp();
 });
@@ -272,49 +282,65 @@ function renderServersTable() {
   }
 
   tbody.innerHTML = filtered.map(srv => {
-    const statusHtml = srv.isBanned
+    const isBanned = Boolean(srv.isBanned);
+    const isOnline = Boolean(srv.online);
+    const statusHtml = isBanned
       ? `<span class="status-badge status-offline" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">🚫 BANNED</span>`
-      : (srv.online
+      : (isOnline
           ? `<span class="status-badge status-online">🟢 Online</span>`
           : `<span class="status-badge status-offline">⚪ Offline</span>`);
 
-    const versionStr = `${srv.version?.minecraft || "1.21.1"} (${srv.version?.loader || "vanilla"})`;
+    const mcVer = escapeHtml(srv.version?.minecraft || "1.21.1");
+    const loader = escapeHtml(srv.version?.loader || "vanilla");
+    const versionStr = `${mcVer} (${loader})`;
     const boostsBadge = srv.sponsored
-      ? `<span class="badge-subtle accent-text">👑 Sponsored (${srv.boosts})</span>`
-      : `<span style="color: #a1a1aa;">${srv.boosts || 0}</span>`;
+      ? `<span class="badge-subtle accent-text">👑 Sponsored (${Number(srv.boosts) || 0})</span>`
+      : `<span style="color: #a1a1aa;">${Number(srv.boosts) || 0}</span>`;
+
+    const safeKey = escapeHtml(srv.serverKey || "");
+    const safeName = escapeHtml(srv.name || "Minecraft Server");
+    const safeMotd = escapeHtml(srv.status?.motd || "No MOTD");
+    const safeIp = escapeHtml(srv.ip || "127.0.0.1");
+    const safePort = Number(srv.port) || 25565;
+    const safeOwner = escapeHtml(srv.ownerEmail || "unclaimed");
+    const players = Number(srv.status?.players) || 0;
+    const maxPlayers = Number(srv.status?.maxPlayers) || 0;
+    const trustScore = Number(srv.trustScore) || 85;
+    const trustLevel = escapeHtml(srv.trustLevel || "TRUSTED");
+    const serverSlots = Number(srv.serverSlots) || 1;
 
     return `
       <tr>
         <td>${statusHtml}</td>
-        <td><strong style="font-family: monospace; color: #38bdf8;">${srv.serverKey}</strong></td>
+        <td><strong style="font-family: monospace; color: #38bdf8;">${safeKey}</strong></td>
         <td>
-          <div style="font-weight: 700; color: #fff;">${srv.name || "Minecraft Server"}</div>
-          <div style="font-size: 11px; color: #71717a;">${srv.status?.motd || "No MOTD"}</div>
+          <div style="font-weight: 700; color: #fff;">${safeName}</div>
+          <div style="font-size: 11px; color: #71717a;">${safeMotd}</div>
         </td>
-        <td style="font-family: monospace; font-size: 12px;">${srv.ip}:${srv.port}</td>
+        <td style="font-family: monospace; font-size: 12px;">${safeIp}:${safePort}</td>
         <td style="font-size: 12px;">${versionStr}</td>
-        <td><strong style="color: #10b981;">${srv.status?.players || 0}</strong> / ${srv.status?.maxPlayers || 0}</td>
+        <td><strong style="color: #10b981;">${players}</strong> / ${maxPlayers}</td>
         <td style="font-size: 12px; color: #a1a1aa;">
-          <div>${srv.ownerEmail || "unclaimed"}</div>
+          <div>${safeOwner}</div>
           ${srv.ownerEmail && srv.ownerEmail !== "unclaimed" ? `
             <div style="font-size: 10px; margin-top: 4px; display: flex; gap: 4px; align-items: center;">
-              <span class="status-badge ${srv.trustScore >= 80 ? 'status-online' : (srv.trustScore >= 50 ? 'status-offline' : 'status-offline')}" style="padding: 1px 6px; font-size: 10px; ${srv.trustScore < 80 ? 'background: rgba(245,158,11,0.2); color: #fbbf24;' : ''}">
-                🛡️ ${srv.trustScore || 85} (${srv.trustLevel || 'TRUSTED'})
+              <span class="status-badge ${trustScore >= 80 ? 'status-online' : 'status-offline'}" style="padding: 1px 6px; font-size: 10px; ${trustScore < 80 ? 'background: rgba(245,158,11,0.2); color: #fbbf24;' : ''}">
+                🛡️ ${trustScore} (${trustLevel})
               </span>
-              <span style="color: #818cf8; font-family: monospace;">[${srv.serverSlots || 1}/4 slots]</span>
+              <span style="color: #818cf8; font-family: monospace;">[${serverSlots}/4 slots]</span>
             </div>
           ` : ''}
         </td>
         <td>${boostsBadge}</td>
         <td>
           <div class="action-btn-group">
-            <button class="btn-action btn-action-secondary" onclick="inspectServer('${srv.serverKey}')" title="Inspect telemetry & players">
+            <button class="btn-action btn-action-secondary" onclick="inspectServer('${safeKey}')" title="Inspect telemetry & players">
               🔍 Inspect
             </button>
-            ${srv.isBanned
-              ? `<button class="btn-action btn-action-success" onclick="toggleBanServer('${srv.serverKey}', false)">Unban</button>`
-              : `<button class="btn-action btn-action-danger" onclick="toggleBanServer('${srv.serverKey}', true)">🚫 Ban</button>`}
-            <button class="btn-action btn-action-danger" onclick="deleteServer('${srv.serverKey}')" title="Delete server entry">🗑️</button>
+            ${isBanned
+              ? `<button class="btn-action btn-action-success" onclick="toggleBanServer('${safeKey}', false)">Unban</button>`
+              : `<button class="btn-action btn-action-danger" onclick="toggleBanServer('${safeKey}', true)">🚫 Ban</button>`}
+            <button class="btn-action btn-action-danger" onclick="deleteServer('${safeKey}')" title="Delete server entry">🗑️</button>
           </div>
         </td>
       </tr>
@@ -344,28 +370,34 @@ function renderLicensesTable() {
   }
 
   tbody.innerHTML = filtered.map(lic => {
+    const status = escapeHtml(lic.status || "active");
     const statusBadge = lic.status === "active"
       ? `<span class="status-badge status-online">Active</span>`
-      : `<span class="status-badge status-offline">${lic.status.toUpperCase()}</span>`;
+      : `<span class="status-badge status-offline">${status.toUpperCase()}</span>`;
 
-    const createdStr = lic.createdAt ? new Date(lic.createdAt).toLocaleDateString() : "—";
+    const createdStr = lic.createdAt ? escapeHtml(new Date(lic.createdAt).toLocaleDateString()) : "—";
+    const safeKey = escapeHtml(lic.licenseKey || "");
+    const safeTier = escapeHtml(lic.tier || "FREE");
+    const safeEmail = escapeHtml(lic.ownerEmail || "Unassigned");
+    const safeServerKey = escapeHtml(lic.serverKey || "—");
+    const safeNotes = escapeHtml(lic.notes || "—");
 
     return `
       <tr>
-        <td style="font-family: monospace; font-weight: 700; color: #fff;">${lic.licenseKey}</td>
-        <td><span class="tier-badge tier-${lic.tier || "FREE"}">${lic.tier || "FREE"}</span></td>
+        <td style="font-family: monospace; font-weight: 700; color: #fff;">${safeKey}</td>
+        <td><span class="tier-badge tier-${safeTier}">${safeTier}</span></td>
         <td>${statusBadge}</td>
-        <td style="color: #a1a1aa;">${lic.ownerEmail || "Unassigned"}</td>
-        <td style="font-family: monospace; font-size: 12px; color: #38bdf8;">${lic.serverKey || "—"}</td>
-        <td style="font-size: 12px; color: #71717a;">${lic.notes || "—"}</td>
+        <td style="color: #a1a1aa;">${safeEmail}</td>
+        <td style="font-family: monospace; font-size: 12px; color: #38bdf8;">${safeServerKey}</td>
+        <td style="font-size: 12px; color: #71717a;">${safeNotes}</td>
         <td style="font-size: 12px; color: #71717a;">${createdStr}</td>
         <td>
           <div class="action-btn-group">
-            <button class="btn-action btn-action-secondary" onclick="copyText('${lic.licenseKey}')">📋 Copy</button>
+            <button class="btn-action btn-action-secondary" onclick="copyText('${safeKey}')">📋 Copy</button>
             ${lic.status === "active"
-              ? `<button class="btn-action btn-action-danger" onclick="toggleLicenseStatus('${lic.licenseKey}', 'revoked')">Revoke</button>`
-              : `<button class="btn-action btn-action-success" onclick="toggleLicenseStatus('${lic.licenseKey}', 'active')">Restore</button>`}
-            <button class="btn-action btn-action-danger" onclick="deleteLicense('${lic.licenseKey}')">🗑️</button>
+              ? `<button class="btn-action btn-action-danger" onclick="toggleLicenseStatus('${safeKey}', 'revoked')">Revoke</button>`
+              : `<button class="btn-action btn-action-success" onclick="toggleLicenseStatus('${safeKey}', 'active')">Restore</button>`}
+            <button class="btn-action btn-action-danger" onclick="deleteLicense('${safeKey}')">🗑️</button>
           </div>
         </td>
       </tr>
@@ -383,17 +415,22 @@ function renderAuditTable() {
   }
 
   tbody.innerHTML = globalAuditLogs.slice(0, 100).map(log => {
-    const timeStr = new Date(log.timestamp).toLocaleTimeString();
-    const actionColor = log.action.includes("BAN") || log.action.includes("DELETE") || log.action.includes("UNAUTHORIZED") ? "#f87171" : "#34d399";
+    const timeStr = escapeHtml(new Date(log.timestamp).toLocaleTimeString());
+    const action = escapeHtml(log.action || "");
+    const actionColor = action.includes("BAN") || action.includes("DELETE") || action.includes("UNAUTHORIZED") ? "#f87171" : "#34d399";
+    const target = escapeHtml(log.target || "");
+    const actor = escapeHtml(log.actor || "");
+    const ip = escapeHtml(log.ip || "");
+    const details = escapeHtml(log.details || "—");
 
     return `
       <tr>
         <td style="font-family: monospace; font-size: 12px; color: #71717a;">${timeStr}</td>
-        <td><strong style="color: ${actionColor}; font-size: 12px;">${log.action}</strong></td>
-        <td style="font-family: monospace; color: #38bdf8; font-size: 12px;">${log.target}</td>
-        <td style="font-size: 12px;">${log.actor}</td>
-        <td style="font-family: monospace; font-size: 12px; color: #a1a1aa;">${log.ip}</td>
-        <td style="font-size: 12px; color: #cbd5e1;">${log.details || "—"}</td>
+        <td><strong style="color: ${actionColor}; font-size: 12px;">${action}</strong></td>
+        <td style="font-family: monospace; color: #38bdf8; font-size: 12px;">${target}</td>
+        <td style="font-size: 12px;">${actor}</td>
+        <td style="font-family: monospace; font-size: 12px; color: #a1a1aa;">${ip}</td>
+        <td style="font-size: 12px; color: #cbd5e1;">${details}</td>
       </tr>
     `;
   }).join("");
@@ -520,20 +557,34 @@ window.inspectServer = function(serverKey) {
   const title = document.getElementById("inspect-server-title");
   const content = document.getElementById("inspect-server-content");
 
-  if (title) title.innerText = `Inspector: ${srv.name} (${srv.serverKey})`;
+  const safeName = escapeHtml(srv.name || "Minecraft Server");
+  const safeKey = escapeHtml(srv.serverKey || "");
+  const safeIp = escapeHtml(srv.ip || "127.0.0.1");
+  const safePort = Number(srv.port) || 25565;
+  const safeOwner = escapeHtml(srv.ownerEmail || "unclaimed");
+  const safeOwnerId = escapeHtml(srv.ownerId || "");
+  const safeHwid = escapeHtml(srv.hwid || "No hardware print recorded");
+  const safeBanReason = escapeHtml(srv.banReason || "Administrative action");
+  const modsCount = Number(srv.modsCount !== undefined ? srv.modsCount : (srv.mods ? srv.mods.length : 0));
+  const trustScore = Number(srv.trustScore) || 85;
+  const trustLevel = escapeHtml(srv.trustLevel || "TRUSTED");
+  const serverSlots = Number(srv.serverSlots) || 1;
+
+  if (title) title.innerText = `Inspector: ${srv.name || "Server"} (${srv.serverKey})`;
 
   const perf = srv.performance || { cpuPercent: 0, ramUsedMB: 0, ramMaxMB: 8192, tps: 20.0, uptimeSeconds: 0 };
-  const pList = srv.playerList || [];
+  const pList = Array.isArray(srv.playerList) ? srv.playerList : [];
 
   const playersHtml = pList.length > 0
     ? pList.map(p => {
-        const pName = typeof p === "string" ? p : p.name;
-        const ping = typeof p === "object" && p.ping !== undefined ? `${p.ping}ms` : "Good";
+        const rawName = typeof p === "string" ? p : (p?.name || "Player");
+        const safePName = escapeHtml(rawName);
+        const pingVal = typeof p === "object" && p?.ping !== undefined ? `${Number(p.ping)}ms` : "Good";
         return `
           <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06); padding: 6px 12px; border-radius: 8px; margin: 4px;">
-            <img src="https://mc-heads.net/avatar/${encodeURIComponent(pName)}/20" alt="${pName}" style="width: 18px; height: 18px; border-radius: 4px;">
-            <span style="font-weight: 700;">${pName}</span>
-            <span style="color: #10b981; font-size: 11px; font-family: monospace;">${ping}</span>
+            <img src="https://mc-heads.net/avatar/${encodeURIComponent(rawName)}/20" alt="${safePName}" style="width: 18px; height: 18px; border-radius: 4px;">
+            <span style="font-weight: 700;">${safePName}</span>
+            <span style="color: #10b981; font-size: 11px; font-family: monospace;">${escapeHtml(pingVal)}</span>
           </div>
         `;
       }).join("")
@@ -544,19 +595,19 @@ window.inspectServer = function(serverKey) {
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px;">
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--admin-border); padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #a1a1aa;">Tick Rate</div>
-          <div style="font-size: 20px; font-weight: 800; color: #10b981;">${(perf.tps || 20).toFixed(1)} TPS</div>
+          <div style="font-size: 20px; font-weight: 800; color: #10b981;">${(Number(perf.tps) || 20).toFixed(1)} TPS</div>
         </div>
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--admin-border); padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #a1a1aa;">RAM Allocated</div>
-          <div style="font-size: 20px; font-weight: 800; color: #38bdf8;">${(perf.ramUsedMB / 1024).toFixed(1)} / ${(perf.ramMaxMB / 1024).toFixed(1)} GB</div>
+          <div style="font-size: 20px; font-weight: 800; color: #38bdf8;">${((Number(perf.ramUsedMB) || 0) / 1024).toFixed(1)} / ${((Number(perf.ramMaxMB) || 8192) / 1024).toFixed(1)} GB</div>
         </div>
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--admin-border); padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #a1a1aa;">CPU Usage</div>
-          <div style="font-size: 20px; font-weight: 800; color: #c084fc;">${perf.cpuPercent || 0}%</div>
+          <div style="font-size: 20px; font-weight: 800; color: #c084fc;">${Number(perf.cpuPercent) || 0}%</div>
         </div>
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--admin-border); padding: 12px; border-radius: 8px;">
           <div style="font-size: 11px; color: #a1a1aa;">Connected Players</div>
-          <div style="font-size: 20px; font-weight: 800; color: #fbbf24;">${srv.status?.players || 0} / ${srv.status?.maxPlayers || 0}</div>
+          <div style="font-size: 20px; font-weight: 800; color: #fbbf24;">${Number(srv.status?.players) || 0} / ${Number(srv.status?.maxPlayers) || 0}</div>
         </div>
       </div>
 
@@ -573,22 +624,22 @@ window.inspectServer = function(serverKey) {
           <div class="data-row">
             <span class="data-label">Trust Score &amp; Level</span>
             <span class="data-value">
-              <span class="status-badge ${srv.trustScore >= 80 ? 'status-online' : 'status-offline'}" style="padding: 2px 8px;">
-                🛡️ ${srv.trustScore || 85} / 100 (${srv.trustLevel || 'TRUSTED'})
+              <span class="status-badge ${trustScore >= 80 ? 'status-online' : 'status-offline'}" style="padding: 2px 8px;">
+                🛡️ ${trustScore} / 100 (${trustLevel})
               </span>
-              ${srv.ownerId ? `<button class="btn-action btn-action-secondary" style="margin-left: 8px;" onclick="adjustUserTrust('${srv.ownerId}', ${srv.trustScore || 85})">⚙️ Adjust Trust</button>` : ''}
+              ${safeOwnerId ? `<button class="btn-action btn-action-secondary" style="margin-left: 8px;" onclick="adjustUserTrust('${safeOwnerId}', ${trustScore})">⚙️ Adjust Trust</button>` : ''}
             </span>
           </div>
           <div class="data-row">
             <span class="data-label">Server Slots Capacity</span>
             <span class="data-value">
-              <span style="font-weight: 800; color: #818cf8;">${srv.serverSlots || 1} / 4 Allowed Slots</span>
-              ${srv.ownerId ? `<button class="btn-action btn-action-secondary" style="margin-left: 8px;" onclick="adjustUserSlots('${srv.ownerId}', ${srv.serverSlots || 1})">➕ Set Slots (1-4)</button>` : ''}
+              <span style="font-weight: 800; color: #818cf8;">${serverSlots} / 4 Allowed Slots</span>
+              ${safeOwnerId ? `<button class="btn-action btn-action-secondary" style="margin-left: 8px;" onclick="adjustUserSlots('${safeOwnerId}', ${serverSlots})">➕ Set Slots (1-4)</button>` : ''}
             </span>
           </div>
           <div class="data-row">
             <span class="data-label">Linked Hardware Fingerprint</span>
-            <span class="data-value code-text">${srv.hwid || 'No hardware print recorded'}</span>
+            <span class="data-value code-text">${safeHwid}</span>
           </div>
         </div>
       </div>
@@ -596,11 +647,11 @@ window.inspectServer = function(serverKey) {
       <div>
         <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; color: #a1a1aa;">Server Details</h4>
         <div class="data-table">
-          <div class="data-row"><span class="data-label">Server Key</span><span class="data-value code-text">${srv.serverKey}</span></div>
-          <div class="data-row"><span class="data-label">Endpoint IP:Port</span><span class="data-value code-text">${srv.ip}:${srv.port}</span></div>
-          <div class="data-row"><span class="data-label">Owner Email</span><span class="data-value">${srv.ownerEmail || "unclaimed"}</span></div>
-          <div class="data-row"><span class="data-label">Mods / Manifest Jars</span><span class="data-value">${srv.modsCount || 0} jar packages</span></div>
-          <div class="data-row"><span class="data-label">Ban Status</span><span class="data-value">${srv.isBanned ? `<span style="color: #ef4444; font-weight: 700;">BANNED (${srv.banReason})</span>` : "Clean / Permitted"}</span></div>
+          <div class="data-row"><span class="data-label">Server Key</span><span class="data-value code-text">${safeKey}</span></div>
+          <div class="data-row"><span class="data-label">Endpoint IP:Port</span><span class="data-value code-text">${safeIp}:${safePort}</span></div>
+          <div class="data-row"><span class="data-label">Owner Email</span><span class="data-value">${safeOwner}</span></div>
+          <div class="data-row"><span class="data-label">Mods / Manifest Jars</span><span class="data-value">${modsCount} jar packages</span></div>
+          <div class="data-row"><span class="data-label">Ban Status</span><span class="data-value">${srv.isBanned ? `<span style="color: #ef4444; font-weight: 700;">BANNED (${safeBanReason})</span>` : "Clean / Permitted"}</span></div>
         </div>
       </div>
     `;

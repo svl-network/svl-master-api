@@ -760,7 +760,13 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
 
   const rawServerKey = sanitizeString(payload.serverKey, 64);
   const authHeader = request.headers.authorization;
-  const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : API_SECRET_KEY;
+  const token = (request as any).authToken || (authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "");
+  if (!token || !isValidToken(token)) {
+    return reply.status(401).send({
+      error: "Unauthorized",
+      message: "Valid authentication token required."
+    });
+  }
   const currentTokenHash = hashToken(token);
 
   // Link server to user account
