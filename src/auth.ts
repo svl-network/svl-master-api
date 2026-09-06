@@ -60,7 +60,7 @@ const dynamicJwtSecret = crypto.randomBytes(32).toString("hex");
 let dynamicAdminSecret: string | null = null;
 
 export const getJwtSecret = (): string => {
-  return process.env.JWT_SECRET || process.env.API_SECRET_KEY || dynamicJwtSecret;
+  return process.env.JWT_SECRET || dynamicJwtSecret;
 };
 
 export type TrustLevel = "TRUSTED" | "NORMAL" | "SUSPICIOUS" | "QUARANTINED" | "BANNED";
@@ -824,7 +824,7 @@ export const seedDemoUser = () => {
  * Searches for a user by email, serverKey, licenseKey, or ID (case-insensitive)
  */
 export const findUserByIdentifier = (identifier: string): User | undefined => {
-  if (!identifier) return undefined;
+  if (!identifier || typeof identifier !== "string") return undefined;
   const clean = identifier.trim().toLowerCase();
   
   if (userStore.has(clean)) {
@@ -833,14 +833,60 @@ export const findUserByIdentifier = (identifier: string): User | undefined => {
   
   for (const user of userStore.values()) {
     if (
-      user.email.toLowerCase() === clean ||
-      user.serverKey.toLowerCase() === clean ||
-      (user.serverKeys && user.serverKeys.some(k => k.toLowerCase() === clean)) ||
-      user.licenseKey.toLowerCase() === clean ||
-      user.id.toLowerCase() === clean
+      (user.email && user.email.toLowerCase() === clean) ||
+      (user.serverKey && user.serverKey.toLowerCase() === clean) ||
+      (Array.isArray(user.serverKeys) && user.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === clean)) ||
+      (user.licenseKey && user.licenseKey.toLowerCase() === clean) ||
+      (user.id && user.id.toLowerCase() === clean)
     ) {
       return user;
     }
   }
   return undefined;
 };
+
+/**
+ * Validates whether a token, license key, or JWT is authorized to claim/bind a specific serverKey
+ */
+export const isAuthorizedForServerKey = (token: string, serverKey: string): boolean => {
+  if (!token || !serverKey || typeof token !== "string" || typeof serverKey !== "string") {
+    return false;
+  }
+  const cleanToken = token.trim();
+  const cleanKey = serverKey.trim().toLowerCase();
+
+  // 1. Master admin secrets have authority over all server keys
+  if (verifyAdminSecret(cleanToken)) return true;
+  if (process.env.MASTER_API_TOKEN && cleanToken === process.env.MASTER_API_TOKEN.trim()) return true;
+
+  // 2. Direct serverKey match
+  if (cleanToken.toLowerCase() === cleanKey) return true;
+
+  // 3. User identifier lookup (by email, ID, licenseKey, or serverKey)
+  const user = findUserByIdentifier(cleanToken);
+  if (user) {
+    if (user.isBanned) return false;
+    if (user.serverKey && user.serverKey.toLowerCase() === cleanKey) return true;
+    if (Array.isArray(user.serverKeys) && user.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === cleanKey)) return true;
+  }
+
+  // 4. License Store verification
+  const lic = licenseStore.get(cleanToken);
+  if (lic && lic.status === "active") {
+    if (lic.serverKey && lic.serverKey.toLowerCase() === cleanKey) return true;
+  }
+
+  // 5. JWT token verification
+  const decoded = verifyJWT(cleanToken);
+  if (decoded) {
+    if (decoded.role === "admin") return true;
+    const jwtUser = userIdStore.get(decoded.sub) || userStore.get(decoded.email.toLowerCase());
+    if (jwtUser && !jwtUser.isBanned) {
+      if (jwtUser.serverKey && jwtUser.serverKey.toLowerCase() === cleanKey) return true;
+      if (Array.isArray(jwtUser.serverKeys) && jwtUser.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === cleanKey)) return true;
+    }
+  }
+
+  return false;
+};
+

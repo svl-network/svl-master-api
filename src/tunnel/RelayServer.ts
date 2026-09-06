@@ -12,6 +12,7 @@ import type { IncomingMessage } from "node:http";
 import net from "node:net";
 import crypto from "node:crypto";
 import { isValidToken } from "../server.js";
+import { isAuthorizedForServerKey } from "../auth.js";
 
 export interface ActiveTunnel {
   serverKey: string;
@@ -34,6 +35,7 @@ const PKT_PING = 0x04;
 const PKT_PONG = 0x05;
 
 // Security Limits & Anti-Abuse
+const SERVER_KEY_REGEX = /^[a-zA-Z0-9_-]{3,64}$/;
 const MAX_PACKET_SIZE = 2 * 1024 * 1024; // 2 MB max packet size
 const MAX_CONCURRENT_CLIENTS_PER_TUNNEL = 100;
 const MAX_CONN_PER_IP_WINDOW = 40; // Max 40 connection handshakes per minute per IP
@@ -354,13 +356,10 @@ export class RelayServer {
   }
 
   /**
-   * Resolves an ActiveTunnel by hostname (e.g. "SVL-FREE-7076-4DB4.realms.sunveil.net", "smp.realms.sunveil.net", or direct proxy host)
+   * Resolves an ActiveTunnel by hostname (e.g. "svl_demo_realm.realms.sunveil.net", "svl-free-7076-4db4", or vanity domain)
    */
   private findTunnelByHost(hostname: string): ActiveTunnel | undefined {
-    if (!hostname) {
-      if (this.activeTunnels.size > 0) {
-        return this.activeTunnels.values().next().value;
-      }
+    if (!hostname || typeof hostname !== "string") {
       return undefined;
     }
 
@@ -375,31 +374,20 @@ export class RelayServer {
       }
     }
 
-    // 2. Normalized search without hyphens/underscores
+    // 2. Normalized alphanumeric match for serverKey (e.g. hyphen/underscore tolerance)
     const cleanHost = lowerHost.replace(/[^a-z0-9]/gi, "");
     const cleanSubdomain = subdomain.replace(/[^a-z0-9]/gi, "");
     for (const [key, tunnel] of this.activeTunnels.entries()) {
       const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/gi, "");
-      if (cleanKey === cleanSubdomain || cleanHost.startsWith(cleanKey)) {
+      if (cleanKey === cleanSubdomain) {
         return tunnel;
       }
     }
 
-    // 3. Fallback for public domain, proxy host, localhost, or if only 1 tunnel is connected
-    const directHost = (process.env.TUNNEL_PUBLIC_HOST || "").toLowerCase();
-    const publicDomain = this.publicDomain.toLowerCase();
-
-    if (
-      lowerHost === directHost ||
-      lowerHost === publicDomain ||
-      lowerHost.endsWith(publicDomain) ||
-      lowerHost.includes("proxy.rlwy.net") ||
-      lowerHost === "localhost" ||
-      lowerHost === "127.0.0.1" ||
-      this.activeTunnels.size === 1
-    ) {
-      if (this.activeTunnels.size > 0) {
-        return this.activeTunnels.values().next().value;
+    // 3. Match against explicitly assigned publicHost
+    for (const tunnel of this.activeTunnels.values()) {
+      if (tunnel.publicHost && tunnel.publicHost.toLowerCase() === lowerHost) {
+        return tunnel;
       }
     }
 
@@ -422,7 +410,7 @@ export class RelayServer {
   }
 
   /**
-   * Mounts the WebSocket server on an existing HTTP/Fastify instance
+   * Mounts the WebSocket server on an existing HTTP/Fastify instance with strict perimeter auth
    */
   public attach(httpServer: any) {
     this.wss = new WebSocketServer({ noServer: true });
@@ -430,11 +418,28 @@ export class RelayServer {
     httpServer.on("upgrade", (request: IncomingMessage, socket: any, head: Buffer) => {
       const url = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
       if (url.pathname === "/api/v1/tunnel/ws") {
-        const token = url.searchParams.get("token") || 
-          (request.headers.authorization?.startsWith("Bearer ") ? request.headers.authorization.substring(7) : "");
-        const serverKey = url.searchParams.get("serverKey") || "";
+        // Extract token preferentially from Authorization header or Sec-WebSocket-Protocol
+        let token = "";
+        const authHeader = request.headers.authorization;
+        if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+          token = authHeader.substring(7).trim();
+        } else if (request.headers["sec-websocket-protocol"]) {
+          const rawProtocols = request.headers["sec-websocket-protocol"];
+          const protocols = (Array.isArray(rawProtocols) ? rawProtocols.join(",") : rawProtocols)
+            .split(",")
+            .map(p => p.trim());
+          if (protocols.length >= 2 && protocols[0] === "svl-token") {
+            token = protocols[1] || "";
+          }
+        }
+        if (!token) {
+          token = url.searchParams.get("token") || "";
+        }
 
-        if (!isValidToken(token) || !serverKey) {
+        const serverKey = (url.searchParams.get("serverKey") || "").trim();
+
+        // Perimeter Authorization: Verify token ownership over the requested serverKey
+        if (!serverKey || !SERVER_KEY_REGEX.test(serverKey) || !isAuthorizedForServerKey(token, serverKey)) {
           socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
           socket.destroy();
           return;
