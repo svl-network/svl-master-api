@@ -55,12 +55,25 @@ const DB_FILE = getDbPath();
 const LICENSES_DB_FILE = getLicensesDbPath();
 const AUDIT_LOG_FILE = getAuditLogDbPath();
 
-// Dynamic fallback secrets generated at boot if not supplied via environment variables
-const dynamicJwtSecret = crypto.randomBytes(32).toString("hex");
 let dynamicAdminSecret: string | null = null;
 
+const getPersistentFallbackSecret = (name: string): string => {
+  try {
+    const secretPath = path.resolve(getDataDir(), `${name}.secret`);
+    if (fs.existsSync(secretPath)) {
+      const existing = fs.readFileSync(secretPath, "utf-8").trim();
+      if (existing.length >= 32) return existing;
+    }
+    const created = crypto.randomBytes(32).toString("hex");
+    fs.writeFileSync(secretPath, created, { encoding: "utf-8", mode: 0o600 });
+    return created;
+  } catch {
+    return crypto.randomBytes(32).toString("hex");
+  }
+};
+
 export const getJwtSecret = (): string => {
-  return process.env.JWT_SECRET || dynamicJwtSecret;
+  return process.env.JWT_SECRET || getPersistentFallbackSecret("jwt");
 };
 
 export type TrustLevel = "TRUSTED" | "NORMAL" | "SUSPICIOUS" | "QUARANTINED" | "BANNED";
