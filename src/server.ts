@@ -144,6 +144,7 @@ await fastify.register(helmet, {
         "https://*.googletagmanager.com",
         "https://adservice.google.com"
       ],
+      scriptSrcAttr: ["'unsafe-inline'"],
       scriptSrcElem: [
         "'self'",
         "'unsafe-inline'",
@@ -247,16 +248,23 @@ fastify.addContentTypeParser("application/octet-stream", (_req, payload, done) =
   done(null, payload);
 });
 
-// Global preHandler for all API routes
+// Global preHandler for native launcher / API signature enforcement
 fastify.addHook("preHandler", async (request, reply) => {
   if (!request.url.startsWith("/api/v1/")) return;
   if (request.url.startsWith("/api/v1/health")) return;
   if (request.url.startsWith("/api/v1/auth/")) return;
   if (request.url.startsWith("/api/v1/admin/")) return;
   if (request.url.startsWith("/api/v1/updates/latest")) return;
+  if (request.url.startsWith("/api/v1/servers")) return;
+  if (request.url.startsWith("/api/v1/storage/check")) return;
+  if (request.url.startsWith("/api/v1/user/")) return;
 
   const authHeader = request.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
+    return;
+  }
+
+  if (request.cookies && (request.cookies.svl_session || request.cookies.svl_admin_session)) {
     return;
   }
 
