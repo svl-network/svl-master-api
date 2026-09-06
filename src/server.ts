@@ -953,14 +953,17 @@ fastify.get("/api/v1/servers", {
     if (srv.isBanned) continue;
 
     const tunnel = relayServer.getTunnel(srv.serverKey);
-    const isOnline = Boolean((srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)) || tunnel || srv.verified);
+    const isOnline = Boolean(tunnel || (srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)));
+    if (!isOnline) {
+      continue; // Strictly omit offline servers from the public directory
+    }
     
     // Privacy & Security: NEVER leak backend origin IP address in public endpoints.
     // Always resolve to the Sunveil SNI relay hostname or active tunnel host.
     const relayHost = `${srv.serverKey.toLowerCase().replace(/[^a-z0-9_-]/g, "")}.realms.sunveil.net`;
     const resolvedIp = tunnel ? tunnel.publicHost : (srv.isCustom ? srv.ip : relayHost);
     const resolvedPort = tunnel ? tunnel.assignedPort : (srv.isCustom ? srv.port : 25565);
-    const onlinePlayers = isOnline ? (srv.status?.players !== undefined ? srv.status.players : (srv.playerList ? srv.playerList.length : 0)) : 0;
+    const onlinePlayers = (srv.status?.players !== undefined ? srv.status.players : (srv.playerList ? srv.playerList.length : 0));
 
     const safePublicServer = {
       serverKey: srv.serverKey,
