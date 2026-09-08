@@ -859,6 +859,22 @@ export const findUserByIdentifier = (identifier: string): User | undefined => {
 };
 
 /**
+ * Checks whether a string resembles an API token, license key, or JWT secret rather than a friendly server key
+ */
+export function isTokenLike(str: string): boolean {
+  if (!str || typeof str !== "string") return false;
+  const s = str.trim();
+  if (s.startsWith("Bearer ") || s.startsWith("SVL-") || s.startsWith("svl_") ||
+      s.startsWith("eyJ") || s.startsWith("sk_") || s.startsWith("token_") || s.startsWith("secret_")) {
+    return true;
+  }
+  if (s.length >= 30 && (/^[a-fA-F0-9]{32,}$/.test(s) || s.includes("."))) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Validates whether a token, license key, or JWT is authorized to claim/bind a specific serverKey
  */
 export const isAuthorizedForServerKey = (token: string, serverKey: string): boolean => {
@@ -868,12 +884,14 @@ export const isAuthorizedForServerKey = (token: string, serverKey: string): bool
   const cleanToken = token.trim();
   const cleanKey = serverKey.trim().toLowerCase();
 
+  // Guard: A master token or secret must NEVER be claimed as a public serverKey
+  if (isTokenLike(cleanKey) || cleanToken.toLowerCase() === cleanKey) {
+    return false;
+  }
+
   // 1. Master admin secrets have authority over all server keys
   if (verifyAdminSecret(cleanToken)) return true;
   if (process.env.MASTER_API_TOKEN && cleanToken === process.env.MASTER_API_TOKEN.trim()) return true;
-
-  // 2. Direct serverKey match
-  if (cleanToken.toLowerCase() === cleanKey) return true;
 
   // 3. User identifier lookup (by email, ID, licenseKey, or serverKey)
   const user = findUserByIdentifier(cleanToken);
@@ -902,4 +920,34 @@ export const isAuthorizedForServerKey = (token: string, serverKey: string): bool
 
   return false;
 };
+
+const KEY_ADJECTIVES = [
+  "swift", "shadow", "iron", "amber", "frost", "mystic", "ember", "storm",
+  "silent", "golden", "crystal", "blazing", "cosmic", "lunar", "solar",
+  "wild", "brave", "ancient", "cobalt", "emerald", "hyper", "stellar"
+];
+
+const KEY_NOUNS = [
+  "dragon", "realm", "haven", "creeper", "golem", "falcon", "beacon",
+  "citadel", "forge", "outpost", "spire", "cavern", "forest", "matrix",
+  "sanctum", "bastion", "domain", "peak", "valley", "sanctuary", "knight"
+];
+
+/**
+ * Generates a clean, friendly random serverKey (e.g. 'swift-dragon-482')
+ * and resolves collisions automatically using the provided callback.
+ */
+export function generateRandomServerKey(isTaken?: (candidate: string) => boolean): string {
+  for (let i = 0; i < 50; i++) {
+    const adj = KEY_ADJECTIVES[Math.floor(Math.random() * KEY_ADJECTIVES.length)];
+    const noun = KEY_NOUNS[Math.floor(Math.random() * KEY_NOUNS.length)];
+    const num = Math.floor(100 + Math.random() * 900); // 100 - 999
+    const candidate = `${adj}-${noun}-${num}`.toLowerCase();
+    if (!isTaken || !isTaken(candidate)) {
+      return candidate;
+    }
+  }
+  // Fallback with timestamp
+  return `realm-${Date.now().toString(36)}-${Math.floor(100 + Math.random() * 900)}`;
+}
 

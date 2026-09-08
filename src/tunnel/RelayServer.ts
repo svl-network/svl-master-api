@@ -12,7 +12,7 @@ import type { IncomingMessage } from "node:http";
 import net from "node:net";
 import crypto from "node:crypto";
 import { isValidToken } from "../server.js";
-import { isAuthorizedForServerKey } from "../auth.js";
+import { isAuthorizedForServerKey, isTokenLike, findUserByIdentifier } from "../auth.js";
 
 export interface ActiveTunnel {
   serverKey: string;
@@ -458,7 +458,15 @@ export class RelayServer {
           token = url.searchParams.get("token") || "";
         }
 
-        const serverKey = (url.searchParams.get("serverKey") || "").trim();
+        let serverKey = (url.searchParams.get("serverKey") || "").trim();
+
+        // Safety Guard: If serverKey was omitted or mistakenly sent as a master token, resolve to user's registered serverKey
+        if (!serverKey || isTokenLike(serverKey) || serverKey === token) {
+          const user = findUserByIdentifier(token);
+          if (user && user.serverKey && !isTokenLike(user.serverKey)) {
+            serverKey = user.serverKey;
+          }
+        }
 
         // Perimeter Authorization: Verify token ownership over the requested serverKey
         if (!serverKey || !SERVER_KEY_REGEX.test(serverKey) || !isAuthorizedForServerKey(token, serverKey)) {

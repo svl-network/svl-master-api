@@ -60,6 +60,8 @@ import {
   saveLicensesToDisk,
   getDataDir,
   findUserByIdentifier,
+  isTokenLike,
+  generateRandomServerKey,
   checkAdminIpLockout,
   recordAdminFailedAttempt,
   recordAdminSuccess,
@@ -467,8 +469,8 @@ export function validateSubdomainOrKey(name: string): { valid: boolean; error?: 
     }
   }
 
-  if (clean.includes("secret") || clean.includes("apikey") || clean.includes("token_master")) {
-    return { valid: false, error: "Security violation: Server key contains prohibited security keywords." };
+  if (clean.includes("secret") || clean.includes("apikey") || clean.includes("token_master") || isTokenLike(clean)) {
+    return { valid: false, error: "Security violation: Server key cannot be an API token, license key, or system secret." };
   }
 
   return { valid: true };
@@ -767,7 +769,7 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     });
   }
 
-  const rawServerKey = sanitizeString(payload.serverKey, 64);
+  let rawServerKey = sanitizeString(payload.serverKey, 64);
   const authHeader = request.headers.authorization;
   const token = (request as any).authToken || (authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "");
   if (!token || !isValidToken(token)) {
@@ -781,16 +783,32 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
   // Link server to user account
   let matchedUser: User | undefined;
   for (const u of userStore.values()) {
-    if (u.licenseKey === token || u.serverKey === token || (u.serverKeys && u.serverKeys.includes(rawServerKey))) {
+    if (u.licenseKey === token || (u.serverKey && u.serverKey === token) || (u.serverKeys && u.serverKeys.includes(rawServerKey))) {
       matchedUser = u;
-      if (u.serverKey !== rawServerKey && (!u.serverKeys || !u.serverKeys.includes(rawServerKey))) {
-        if (!u.serverKeys) u.serverKeys = [u.serverKey];
-        if (u.serverKeys.length < (u.serverSlots || 1)) {
-          u.serverKeys.push(rawServerKey);
-        }
+      break;
+    }
+  }
+
+  // Safety & Auto-Correction: If master token or token-like string was passed as serverKey, protect & auto-correct it
+  if (isTokenLike(rawServerKey) || rawServerKey.toLowerCase() === token.toLowerCase()) {
+    if (matchedUser && matchedUser.serverKey && !isTokenLike(matchedUser.serverKey)) {
+      rawServerKey = matchedUser.serverKey;
+    } else {
+      rawServerKey = generateRandomServerKey(isServerKeyClaimed);
+      if (matchedUser) {
+        matchedUser.serverKey = rawServerKey;
+        if (!matchedUser.serverKeys) matchedUser.serverKeys = [];
+        if (!matchedUser.serverKeys.includes(rawServerKey)) matchedUser.serverKeys.push(rawServerKey);
         saveDatabaseToDisk();
       }
-      break;
+    }
+  } else if (matchedUser) {
+    if (matchedUser.serverKey !== rawServerKey && (!matchedUser.serverKeys || !matchedUser.serverKeys.includes(rawServerKey))) {
+      if (!matchedUser.serverKeys) matchedUser.serverKeys = [matchedUser.serverKey];
+      if (matchedUser.serverKeys.length < (matchedUser.serverSlots || 1)) {
+        matchedUser.serverKeys.push(rawServerKey);
+      }
+      saveDatabaseToDisk();
     }
   }
 
@@ -1210,7 +1228,7 @@ fastify.post<{ Body: { email?: string; password?: string; tosAgreed?: boolean; t
 
     const { hash, salt } = hashPassword(password);
     const licenseKey = generateLicenseKey("FREE");
-    const serverKey = "realm_" + crypto.randomBytes(6).toString("hex");
+    const serverKey = generateRandomServerKey(isServerKeyClaimed);
 
     const newUser: User = {
       id: "usr_" + crypto.randomBytes(8).toString("hex"),
@@ -1471,7 +1489,7 @@ fastify.post<{ Body: { name?: string; serverKey?: string } }>("/api/v1/user/serv
     }
     finalKey = cleanKey;
   } else {
-    finalKey = "realm_" + crypto.randomBytes(6).toString("hex");
+    finalKey = generateRandomServerKey(isServerKeyClaimed);
   }
 
   const newServerName = sanitizeString(name || `Server ${currentKeys.length + 1}`, 64);
@@ -1581,7 +1599,7 @@ fastify.post<{
     }
     finalKey = cleanKey;
   } else {
-    finalKey = "custom_" + crypto.randomBytes(6).toString("hex");
+    finalKey = generateRandomServerKey(isServerKeyClaimed);
   }
 
   const safeName = sanitizeString(name, 64);
