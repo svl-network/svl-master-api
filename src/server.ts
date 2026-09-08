@@ -1075,13 +1075,13 @@ fastify.get("/api/v1/updates/latest", async () => {
   };
 });
 
-// Download Redirection Routes
+// Download Redirection / Direct Serve Routes
 fastify.get("/download", async (_request, reply) => {
-  return reply.redirect("https://github.com/svl-network/svl-connect/releases/latest", 302);
+  return reply.redirect("/downloads/svl-connect-windows-x64.zip", 302);
 });
 
 fastify.get("/api/v1/download/launcher", async (_request, reply) => {
-  return reply.redirect("https://github.com/svl-network/svl-connect/releases/latest", 302);
+  return reply.redirect("/downloads/svl-connect-windows-x64.zip", 302);
 });
 
 // User JWT Authentication Pre-Handler
