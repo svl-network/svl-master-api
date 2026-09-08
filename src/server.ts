@@ -1094,31 +1094,30 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
 fastify.get("/api/v1/updates/latest", async () => {
   return {
     client: {
-      version: "1.0.2",
+      version: "1.0.4",
       mandatory: false,
-      url: "https://github.com/svl-network/svl-connect/releases/latest",
-      downloadUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-windows-x64.zip",
+      url: "https://realms.sunveil.net/releases.html",
+      downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.4-Windows-x64-Portable.zip",
       platforms: {
         windows: {
-          version: "1.0.2",
-          installerUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-setup.exe",
-          portableUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-windows-x64.zip"
-        },
-        linux: {
-          version: "1.0.2",
-          appImageUrl: "https://github.com/svl-network/svl-connect/releases/latest/download/svl-connect-linux-x86_64.AppImage"
+          version: "1.0.4",
+          downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.4-Windows-x64-Portable.zip",
+          portableUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.4-Windows-x64-Portable.zip"
         }
       },
-      changelog: "SVL Connect v1.0.2: In-app manual custom Minecraft server management, standalone instance generation and direct connection, Modrinth discovery, and encrypted relay performance upgrades."
+      changelog: "SVL Connect v1.0.4: Hardened anti-ban IP isolation, friendly random key resolution, automatic background update detection."
     },
     bridge: {
-      version: "2.1.0",
-      url: "https://github.com/svl-network/svl-bridge/releases/latest",
+      version: "2.3.0",
+      url: "https://realms.sunveil.net/releases.html",
+      downloadUrl: "https://realms.sunveil.net/downloads/svl-bridge-paper.jar",
       downloads: {
-        paper: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-paper-1.0.0.jar",
-        fabric: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-fabric-1.0.0.jar",
-        forge: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-forge-1.0.0.jar",
-        neoforge: "https://github.com/svl-network/svl-bridge/releases/latest/download/svl-bridge-neoforge-1.0.0.jar"
+        paper: "https://realms.sunveil.net/downloads/svl-bridge-paper.jar",
+        fabric: "https://realms.sunveil.net/downloads/svl-bridge-fabric.jar",
+        forge: "https://realms.sunveil.net/downloads/svl-bridge-forge.jar",
+        "forge-1.20.1": "https://realms.sunveil.net/downloads/svl-bridge-forge-1.20.1.jar",
+        neoforge: "https://realms.sunveil.net/downloads/svl-bridge-neoforge.jar",
+        "neoforge-1.20.4": "https://realms.sunveil.net/downloads/svl-bridge-neoforge-1.20.4.jar"
       }
     }
   };
