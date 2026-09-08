@@ -13,6 +13,7 @@ src/*.js
 src/*.d.ts
 src/*.map
 *.jar
+!public/downloads/*.jar
 .DS_Store
 *.tsbuildinfo
 

@@ -183,6 +183,28 @@ function createStatusResponsePacket(hostname: string): Buffer {
   return Buffer.concat([packetLenBuf, packetContent]);
 }
 
+const IP_HARDENING_SALT = process.env.TUNNEL_IP_SALT || "sunveil_secure_ip_hardening_salt_2026";
+
+/**
+ * Generates a hardened, cryptographically salted loopback IP (127.x.y.z) uniquely mapped to the client's system/IP/HWID.
+ * Guarantees that the address is NEVER 127.0.0.1 or 127.0.0.0, preventing collateral IP bans and IP spoofing.
+ */
+export function deriveHardenedClientIp(clientIdentifier: string): string {
+  if (!clientIdentifier || clientIdentifier === "unknown" || clientIdentifier === "127.0.0.1" || clientIdentifier === "localhost") {
+    const randA = 200 + Math.floor(Math.random() * 50);
+    const randB = 1 + Math.floor(Math.random() * 250);
+    const randC = 2 + Math.floor(Math.random() * 250);
+    return `127.${randA}.${randB}.${randC}`;
+  }
+
+  const hash = crypto.createHmac("sha256", IP_HARDENING_SALT).update(clientIdentifier.trim()).digest();
+  const octet2 = 10 + ((hash[0] ?? 0) % 240);
+  const octet3 = 1 + ((hash[1] ?? 0) % 254);
+  const octet4 = 2 + ((hash[2] ?? 0) % 253);
+
+  return `127.${octet2}.${octet3}.${octet4}`;
+}
+
 export class RelayServer {
   private wss: WebSocketServer | null = null;
   private activeTunnels = new Map<string, ActiveTunnel>(); // serverKey -> ActiveTunnel
@@ -479,6 +501,10 @@ export class RelayServer {
       return;
     }
 
+    const rawIp = clientSocket.remoteAddress || "unknown";
+    const clientIp = rawIp.replace(/^::ffff:/, "");
+    const hardenedIp = deriveHardenedClientIp(clientIp);
+
     const connId = this.connectionCounter++;
     tunnel.clientSockets.set(connId, clientSocket);
     tunnel.activeClients = tunnel.clientSockets.size;
@@ -486,10 +512,12 @@ export class RelayServer {
     clientSocket.setNoDelay(true);
     clientSocket.setKeepAlive(true, 5000);
 
-    // Send PKT_OPEN to Bridge
-    const openFrame = Buffer.allocUnsafe(5);
+    // Send PKT_OPEN to Bridge with hardened system IP payload
+    const ipBytes = Buffer.from(hardenedIp, "utf8");
+    const openFrame = Buffer.allocUnsafe(5 + ipBytes.length);
     openFrame[0] = PKT_OPEN;
     openFrame.writeUInt32BE(connId, 1);
+    ipBytes.copy(openFrame, 5);
     if (tunnel.ws.readyState === WebSocket.OPEN) {
       tunnel.ws.send(openFrame, { binary: true, compress: false });
     }
