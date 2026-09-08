@@ -788,6 +788,15 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
       break;
     }
   }
+  if (!matchedUser && licenseStore.has(token)) {
+    const lic = licenseStore.get(token)!;
+    if (lic.ownerEmail) {
+      matchedUser = userStore.get(lic.ownerEmail.toLowerCase());
+    }
+  }
+  if (!matchedUser) {
+    matchedUser = findUserByIdentifier(token);
+  }
 
   // Safety & Auto-Correction: If master token or token-like string was passed as serverKey, protect & auto-correct it
   if (isTokenLike(rawServerKey) || rawServerKey.toLowerCase() === token.toLowerCase()) {
@@ -812,6 +821,24 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     }
   }
 
+  // Clean up previous stale offline ghost entries for this user / license
+  if (matchedUser) {
+    for (const [oldKey, oldSrv] of serverStore.entries()) {
+      if (oldKey !== rawServerKey) {
+        const isOldKeyOwned = (matchedUser.serverKeys && matchedUser.serverKeys.includes(oldKey)) ||
+          oldKey === matchedUser.serverKey ||
+          serverOwnerStore.get(oldKey) === currentTokenHash;
+        if (isOldKeyOwned) {
+          const tunnel = relayServer.getTunnel(oldKey);
+          if (!tunnel && (!oldSrv.lastHeartbeat || Date.now() - oldSrv.lastHeartbeat > 60000)) {
+            serverStore.delete(oldKey);
+            serverOwnerStore.delete(oldKey);
+          }
+        }
+      }
+    }
+  }
+
   // Check License Store Status
   if (licenseStore.has(token)) {
     const lic = licenseStore.get(token)!;
@@ -820,6 +847,10 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
         error: "Forbidden",
         message: `License is ${lic.status}. Reason: ${lic.revocationReason || "Administrative enforcement"}`
       });
+    }
+    if (lic.serverKey !== rawServerKey) {
+      lic.serverKey = rawServerKey;
+      saveLicensesToDisk();
     }
   }
 
@@ -2172,12 +2203,24 @@ fastify.get("/api/v1/admin/servers", { preHandler: [requireAdminAuth] }, async (
         break;
       }
     }
+    if (!matchedUser) {
+      for (const lic of licenseStore.values()) {
+        if (lic.serverKey === key && lic.ownerEmail) {
+          matchedUser = userStore.get(lic.ownerEmail.toLowerCase());
+          break;
+        }
+      }
+    }
+
+    const relayHost = `${srv.serverKey.toLowerCase().replace(/[^a-z0-9_-]/g, "")}.realms.sunveil.net`;
 
     list.push({
       serverKey: srv.serverKey,
       name: srv.name,
-      ip: srv.ip,
-      port: srv.port,
+      endpoint: `🛡️ ${relayHost}`,
+      relayHost,
+      ip: "🛡️ Protected Relay",
+      port: tunnel ? tunnel.assignedPort : (srv.isCustom ? srv.port : 25565),
       region: srv.region || "EU",
       version: srv.version,
       status: {
@@ -2191,7 +2234,7 @@ fastify.get("/api/v1/admin/servers", { preHandler: [requireAdminAuth] }, async (
       isBanned: Boolean(srv.isBanned),
       banReason: srv.banReason || null,
       bannedAt: srv.bannedAt || null,
-      ownerEmail: matchedUser?.email || "unclaimed",
+      ownerEmail: matchedUser?.email || (srv.isCustom ? "custom_admin" : "unclaimed"),
       ownerId: matchedUser?.id || null,
       trustScore: matchedUser?.trustScore || 85,
       trustLevel: matchedUser?.trustLevel || "TRUSTED",
@@ -2204,6 +2247,24 @@ fastify.get("/api/v1/admin/servers", { preHandler: [requireAdminAuth] }, async (
   }
 
   return { servers: list };
+});
+
+// Admin Prune Offline / Stale Servers
+fastify.post("/api/v1/admin/servers/prune-offline", { preHandler: [requireAdminAuth] }, async (request, reply) => {
+  const now = Date.now();
+  let prunedCount = 0;
+  for (const [key, srv] of serverStore.entries()) {
+    const tunnel = relayServer.getTunnel(key);
+    const isOnline = Boolean(tunnel || (srv.lastHeartbeat && (now - srv.lastHeartbeat < 90000)));
+    if (!isOnline) {
+      serverStore.delete(key);
+      serverOwnerStore.delete(key);
+      prunedCount++;
+    }
+  }
+  saveDatabaseToDisk();
+  logAdminAction("PRUNE_OFFLINE_SERVERS", `Pruned ${prunedCount} offline servers`, (request as any).adminUser?.email || "Admin", request.ip, `Count: ${prunedCount}`);
+  return { success: true, prunedCount, message: `Successfully pruned ${prunedCount} offline ghost servers.` };
 });
 
 fastify.post<{ Params: { serverKey: string }; Body: { banned: boolean; reason?: string } }>(

@@ -317,7 +317,13 @@ function renderServersTable() {
           <div style="font-weight: 700; color: #fff;">${safeName}</div>
           <div style="font-size: 11px; color: #71717a;">${safeMotd}</div>
         </td>
-        <td style="font-family: monospace; font-size: 12px;">${safeIp}:${safePort}</td>
+        <td>
+          <div style="font-family: monospace; font-size: 11px; color: #38bdf8; display: inline-flex; align-items: center; gap: 4px; background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.3); padding: 3px 8px; border-radius: 6px;">
+            <span>🛡️</span>
+            <span>${safeKey}.realms.sunveil.net</span>
+          </div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">🔒 Origin IP Protected</div>
+        </td>
         <td style="font-size: 12px;">${versionStr}</td>
         <td><strong style="color: #10b981;">${players}</strong> / ${maxPlayers}</td>
         <td style="font-size: 12px; color: #a1a1aa;">
@@ -735,6 +741,31 @@ window.deleteLicense = async function(licenseKey) {
     if (!res.ok) throw new Error(data.message || "Failed to delete license.");
 
     showToast(`License '${licenseKey}' deleted.`);
+    loadAllAdminData();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.pruneOfflineServers = async function() {
+  if (!confirm("Are you sure you want to remove all stale offline servers? Active and online servers will remain untouched.")) {
+    return;
+  }
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+
+    const res = await fetch("/api/v1/admin/servers/prune-offline", {
+      method: "POST",
+      headers,
+      credentials: "include"
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to prune servers.");
+
+    showToast(data.message || `Pruned ${data.prunedCount} offline servers.`);
     loadAllAdminData();
   } catch (err) {
     alert(err.message);
