@@ -204,6 +204,65 @@ await fastify.register(helmet, {
   crossOriginEmbedderPolicy: false
 });
 
+// -- EMERGENCY PANIC MODE GLOBALS --
+let isPanicModeActive = false;
+const PANIC_STATE_FILE = path.join(getDataDir(), "panic_state.json");
+
+function loadPanicState() {
+  if (fs.existsSync(PANIC_STATE_FILE)) {
+    try {
+      const state = JSON.parse(fs.readFileSync(PANIC_STATE_FILE, "utf-8"));
+      isPanicModeActive = state.active || false;
+    } catch (e) {}
+  }
+}
+function savePanicState(active: boolean) {
+  isPanicModeActive = active;
+  fs.writeFileSync(PANIC_STATE_FILE, JSON.stringify({ active }), "utf-8");
+}
+loadPanicState();
+
+async function triggerPanicMode(ip: string, reason: string) {
+  if (isPanicModeActive) return; // already active
+  savePanicState(true);
+  
+  if (process.env.JUPITER_WEBHOOK_URL) {
+    try {
+      await fetch(process.env.JUPITER_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: 'PANIC_MODE_ACTIVATED',
+          ip,
+          reason,
+          timestamp: new Date().toISOString()
+        })
+      });
+    } catch (e) {}
+  }
+  
+  setTimeout(() => process.exit(1), 1000);
+}
+
+// Global Lockdown Hook
+fastify.addHook("onRequest", async (request, reply) => {
+  if (isPanicModeActive) {
+    if (request.url.startsWith("/api/unlock-panic")) return;
+    return reply.status(503).send({ error: "Service Unavailable - Lockdown Active" });
+  }
+});
+
+// Secret unlock endpoint
+fastify.post("/api/unlock-panic", async (request, reply) => {
+  const { secret } = request.body as any;
+  if (secret === process.env.PANIC_UNLOCK_SECRET || secret === API_SECRET_KEY) {
+    savePanicState(false);
+    return reply.send({ success: true, message: "Panic mode unlocked" });
+  }
+  return reply.status(403).send({ error: "Forbidden" });
+});
+// -- END EMERGENCY PANIC MODE GLOBALS --
+
 // Register Rate Limiting
 await fastify.register(rateLimit, {
   max: 300,
@@ -217,6 +276,9 @@ await fastify.register(rateLimit, {
       return true;
     }
     return false;
+  },
+  onExceeded: (req, key) => {
+    triggerPanicMode(req.ip, "Scrape detector triggered (>300 req/min)");
   },
   errorResponseBuilder: function (_request, context) {
     return {
