@@ -416,6 +416,7 @@ export interface ServerPayload {
   ownerEmail?: string | undefined;
   slotIndex?: number | undefined;
   isCustom?: boolean | undefined;
+  disallowedClientMods?: string[] | undefined;
 }
 
 // Persistent Server Stores
@@ -1033,7 +1034,10 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     isBanned: false,
     performance: performanceData,
     playerList: safePlayerList,
-    ownerEmail: matchedUser?.email || undefined
+    ownerEmail: matchedUser?.email || undefined,
+    disallowedClientMods: Array.isArray(payload.disallowedClientMods)
+      ? payload.disallowedClientMods.map(s => sanitizeString(String(s).toLowerCase(), 64)).filter(Boolean)
+      : []
   };
 
   serverStore.set(rawServerKey, serverData);
@@ -1092,6 +1096,7 @@ fastify.get("/api/v1/servers", {
       online: isOnline,
       isCustom: Boolean(srv.isCustom),
       modCount: srv.mods ? srv.mods.length : 0,
+      disallowedClientMods: srv.disallowedClientMods || [],
       tunnel: tunnel ? {
         active: true,
         publicHost: tunnel.publicHost,
@@ -1145,6 +1150,7 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
     version: srv.version,
     verified: srv.verified,
     mods: srv.mods,
+    disallowedClientMods: srv.disallowedClientMods || [],
     boosts: srv.boosts || 0,
     sponsored: Boolean(srv.sponsored),
     bannerUrl: srv.bannerUrl || null,
