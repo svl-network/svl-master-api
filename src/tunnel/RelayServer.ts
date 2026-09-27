@@ -672,7 +672,8 @@ export class RelayServer {
     ws.send(welcomeMsg);
 
     // Handle incoming frames from Bridge
-    ws.on("message", (data: Buffer | string) => {
+    ws.on("message", (data: Buffer | string | Buffer[] | ArrayBuffer) => {
+      let buf: Buffer;
       if (typeof data === "string") {
         try {
           const parsed = JSON.parse(data);
@@ -681,16 +682,22 @@ export class RelayServer {
           }
         } catch {}
         return;
+      } else if (Buffer.isBuffer(data)) {
+        buf = data;
+      } else if (Array.isArray(data)) {
+        buf = Buffer.concat(data);
+      } else {
+        buf = Buffer.from(data as any);
       }
 
-      if (!Buffer.isBuffer(data) || data.length < 5) return;
+      if (buf.length < 5) return;
 
-      const pktType = data.readUInt8(0);
-      const connId = data.readUInt32BE(1);
+      const pktType = buf.readUInt8(0);
+      const connId = buf.readUInt32BE(1);
       const targetSocket = clientSockets.get(connId);
 
       if (pktType === PKT_DATA && targetSocket && !targetSocket.destroyed) {
-        const payload = data.subarray(5);
+        const payload = buf.subarray(5);
         targetSocket.write(payload);
         tunnel.bytesSent += payload.length;
       } else if (pktType === PKT_CLOSE && targetSocket) {
