@@ -66,7 +66,9 @@ import {
   recordAdminFailedAttempt,
   recordAdminSuccess,
   unblockAdminIp,
-  adminIpLockoutMap
+  adminIpLockoutMap,
+  revokeToken,
+  revokeAllUserTokens
 } from "./auth.js";
 import { relayServer } from "./tunnel/RelayServer.js";
 
@@ -119,8 +121,17 @@ await fastify.register(cors, {
       "http://127.0.0.1:3001"
     ];
 
-    if (allowed.includes(origin) || origin.endsWith(".sunveil.net")) {
-      return cb(null, true);
+    try {
+      const url = new URL(origin);
+      if (
+        allowed.includes(origin) ||
+        ((url.protocol === "https:" || url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+          (url.hostname === "sunveil.net" || url.hostname.endsWith(".sunveil.net")))
+      ) {
+        return cb(null, true);
+      }
+    } catch {
+      return cb(new Error("CORS origin not allowed"), false);
     }
 
     // In production, reject unknown cross-origin web requests
@@ -254,8 +265,26 @@ fastify.addHook("onRequest", async (request, reply) => {
 
 // Secret unlock endpoint
 fastify.post("/api/unlock-panic", async (request, reply) => {
-  const { secret } = request.body as any;
-  if (secret === process.env.PANIC_UNLOCK_SECRET || secret === API_SECRET_KEY) {
+  const { secret } = (request.body || {}) as any;
+  if (!secret || typeof secret !== "string") {
+    return reply.status(400).send({ error: "Secret is required." });
+  }
+
+  const validSecrets = [process.env.PANIC_UNLOCK_SECRET, API_SECRET_KEY].filter(
+    (s): s is string => typeof s === "string" && s.trim().length > 0
+  );
+
+  let matched = false;
+  for (const valid of validSecrets) {
+    const a = Buffer.from(crypto.createHash("sha256").update(secret.trim()).digest("hex"));
+    const b = Buffer.from(crypto.createHash("sha256").update(valid.trim()).digest("hex"));
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+      matched = true;
+      break;
+    }
+  }
+
+  if (matched) {
     savePanicState(false);
     return reply.send({ success: true, message: "Panic mode unlocked" });
   }
@@ -776,14 +805,49 @@ fastify.post("/api/v1/storage/upload", {
     }
 
     const fileBuffer = fs.readFileSync(tempFilePath);
-    const forbiddenExts = [".exe", ".bat", ".cmd", ".ps1", ".vbs", ".elf", ".scr", ".dll", ".so", ".msi", ".pif", ".hta", ".wsf", ".cpl", ".reg"];
     const fileContentStr = fileBuffer.toString("latin1").toLowerCase();
+
+    // 1. Scan for forbidden script & native executable extensions inside the archive
+    const forbiddenExts = [".exe", ".bat", ".cmd", ".ps1", ".vbs", ".elf", ".scr", ".dll", ".so", ".dylib", ".msi", ".pif", ".hta", ".wsf", ".cpl", ".reg"];
     for (const ext of forbiddenExts) {
       if (fileContentStr.includes(ext)) {
         fs.unlinkSync(tempFilePath);
         return reply.status(400).send({
           error: "Malware/Executable Prohibited",
           message: `Security Policy Violation: JAR archive contains unauthorized executable or script payload (${ext}).`
+        });
+      }
+    }
+
+    // 2. Scan for Path Traversal in ZIP central directory header
+    if (fileContentStr.includes("../") || fileContentStr.includes("..\\")) {
+      fs.unlinkSync(tempFilePath);
+      return reply.status(400).send({
+        error: "Zip Slip Prohibited",
+        message: "Security Policy Violation: Archive contains illegal relative path traversal entries (..)."
+      });
+    }
+
+    // 3. Scan for unauthorized Java Agents (premain/agentmain byte injection)
+    const dangerousManifestKeys = ["premain-class", "agent-class", "launcher-agent-class", "can-redefine-classes"];
+    for (const key of dangerousManifestKeys) {
+      if (fileContentStr.includes(key)) {
+        fs.unlinkSync(tempFilePath);
+        return reply.status(400).send({
+          error: "Unauthorized Java Agent",
+          message: `Security Policy Violation: Uploaded mod contains prohibited Java instrumentation agent (${key}).`
+        });
+      }
+    }
+
+    // 4. Scan for known malicious C2 webhook exfiltration patterns
+    const roguePatterns = ["discord.com/api/webhooks/", "discordapp.com/api/webhooks/", "api.telegram.org/bot", "transfer.sh/"];
+    for (const pattern of roguePatterns) {
+      if (fileContentStr.includes(pattern)) {
+        fs.unlinkSync(tempFilePath);
+        return reply.status(400).send({
+          error: "Malware Pattern Detected",
+          message: "Security Policy Violation: JAR archive contains unauthorized webhook / telemetry exfiltration endpoint."
         });
       }
     }
@@ -1401,7 +1465,17 @@ fastify.post<{ Body: { email?: string; password?: string; tosAgreed?: boolean; t
 );
 
 // 10. Auth Login
-fastify.post<{ Body: { email?: string; password?: string; hwid?: string } }>("/api/v1/auth/login", async (request, reply) => {
+fastify.post<{ Body: { email?: string; password?: string; hwid?: string } }>(
+  "/api/v1/auth/login",
+  {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: "1 minute"
+      }
+    }
+  },
+  async (request, reply) => {
   const { email, password, hwid: bodyHwid } = request.body || {};
   if (!email || !password || typeof email !== "string" || typeof password !== "string") {
     return reply.status(400).send({ statusCode: 400, error: "Bad Request", message: "Email and password are required." });
@@ -1475,8 +1549,14 @@ fastify.post<{ Body: { email?: string; password?: string; hwid?: string } }>("/a
 
 // 10b. Auth Logout
 fastify.post("/api/v1/auth/logout", async (request, reply) => {
+  const cookieToken = request.cookies?.svl_session;
+  const authHeader = request.headers.authorization;
+  const bearerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : undefined;
+  if (cookieToken) revokeToken(cookieToken);
+  if (bearerToken) revokeToken(bearerToken);
+
   reply.clearCookie("svl_session", { path: "/" });
-  return { success: true, message: "Logged out successfully." };
+  return { success: true, message: "Logged out and session revoked successfully." };
 });
 
 // 11. User Dashboard Metrics & Multi-Server Telemetry
@@ -2034,6 +2114,31 @@ fastify.post("/api/v1/user/regenerate-key", { preHandler: [requireUserAuth] }, h
 // 18. AUTOMATED TEBEX STORE WEBHOOK HANDLER (SLOT EXPANSION & SPONSORS)
 // ============================================================================
 const handleTebexWebhook = async (request: FastifyRequest, reply: FastifyReply) => {
+  const tebexSecret = (process.env.TEBEX_WEBHOOK_SECRET || process.env.TEBEX_SECRET || process.env.TEBEX_PRIVATE_KEY || "").trim();
+  const signature = (request.headers["x-signature"] || request.headers["x-bc-sig"]) as string | undefined;
+  const headerSecret = (request.headers["x-tebex-secret"] || request.headers["x-webhook-secret"]) as string | undefined;
+
+  if (tebexSecret) {
+    let authorized = false;
+    if (signature) {
+      const hmac = crypto.createHmac("sha256", tebexSecret).update(JSON.stringify(request.body)).digest("hex");
+      const a = Buffer.from(hmac);
+      const b = Buffer.from(signature);
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        authorized = true;
+      }
+    } else if (headerSecret) {
+      const a = Buffer.from(headerSecret);
+      const b = Buffer.from(tebexSecret);
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        authorized = true;
+      }
+    }
+    if (!authorized) {
+      return reply.status(403).send({ error: "Forbidden", message: "Invalid or missing Tebex webhook signature." });
+    }
+  }
+
   const body = (request.body || {}) as any;
   const webhookType = body.type || body.event || "";
   const webhookId = body.id || "";
@@ -2194,8 +2299,14 @@ fastify.post<{ Body: { secretKey?: string; password?: string } }>("/api/v1/admin
 });
 
 fastify.post("/api/v1/admin/logout", async (request, reply) => {
+  const cookieToken = request.cookies?.svl_admin_session;
+  const authHeader = request.headers.authorization;
+  const bearerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : undefined;
+  if (cookieToken) revokeToken(cookieToken);
+  if (bearerToken) revokeToken(bearerToken);
+
   reply.clearCookie("svl_admin_session", { path: "/" });
-  return { success: true, message: "Admin session cleared." };
+  return { success: true, message: "Admin session revoked and cleared." };
 });
 
 // Admin Security Management - View Active Lockouts

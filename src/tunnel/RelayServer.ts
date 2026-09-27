@@ -184,12 +184,14 @@ function createStatusResponsePacket(hostname: string): Buffer {
 }
 
 const IP_HARDENING_SALT = process.env.TUNNEL_IP_SALT || "sunveil_secure_ip_hardening_salt_2026";
+const PREVIOUS_IP_HARDENING_SALT = process.env.TUNNEL_PREVIOUS_IP_SALT || "";
 
 /**
  * Generates a hardened, cryptographically salted loopback IP (127.x.y.z) uniquely mapped to the client's system/IP/HWID.
  * Guarantees that the address is NEVER 127.0.0.1 or 127.0.0.0, preventing collateral IP bans and IP spoofing.
+ * Supports smooth crypto-agility key rotation via optional previous salt fallback.
  */
-export function deriveHardenedClientIp(clientIdentifier: string): string {
+export function deriveHardenedClientIp(clientIdentifier: string, usePreviousSalt = false): string {
   if (!clientIdentifier || clientIdentifier === "unknown" || clientIdentifier === "127.0.0.1" || clientIdentifier === "localhost") {
     const randA = 200 + Math.floor(Math.random() * 50);
     const randB = 1 + Math.floor(Math.random() * 250);
@@ -197,7 +199,8 @@ export function deriveHardenedClientIp(clientIdentifier: string): string {
     return `127.${randA}.${randB}.${randC}`;
   }
 
-  const hash = crypto.createHmac("sha256", IP_HARDENING_SALT).update(clientIdentifier.trim()).digest();
+  const salt = (usePreviousSalt && PREVIOUS_IP_HARDENING_SALT) ? PREVIOUS_IP_HARDENING_SALT : IP_HARDENING_SALT;
+  const hash = crypto.createHmac("sha256", salt).update(clientIdentifier.trim()).digest();
   const octet2 = 10 + ((hash[0] ?? 0) % 240);
   const octet3 = 1 + ((hash[1] ?? 0) % 254);
   const octet4 = 2 + ((hash[2] ?? 0) % 253);
@@ -540,9 +543,32 @@ export class RelayServer {
       tunnel.bytesReceived += initialPayload.length;
     }
 
-    // Forward stream data with zero-copy fast buffer
+    // Backpressure Thresholds to prevent memory exhaustion
+    const WS_BUFFER_HIGH_WATERMARK = 1024 * 1024; // 1 MB
+    const WS_BUFFER_LOW_WATERMARK = 256 * 1024; // 256 KB
+    const WS_BUFFER_CRITICAL_OOM = 8 * 1024 * 1024; // 8 MB
+
+    // Forward stream data with zero-copy fast buffer and backpressure control
     clientSocket.on("data", (chunk: Buffer) => {
       if (tunnel.ws.readyState === WebSocket.OPEN) {
+        if (tunnel.ws.bufferedAmount > WS_BUFFER_CRITICAL_OOM) {
+          // Client flooding socket faster than upstream bridge can consume - drop to protect memory
+          clientSocket.destroy();
+          return;
+        }
+
+        if (tunnel.ws.bufferedAmount > WS_BUFFER_HIGH_WATERMARK) {
+          clientSocket.pause();
+          const resumeCheck = setInterval(() => {
+            if (tunnel.ws.readyState !== WebSocket.OPEN || tunnel.ws.bufferedAmount < WS_BUFFER_LOW_WATERMARK) {
+              clearInterval(resumeCheck);
+              if (!clientSocket.destroyed) {
+                clientSocket.resume();
+              }
+            }
+          }, 15);
+        }
+
         const frame = Buffer.allocUnsafe(5 + chunk.length);
         frame[0] = PKT_DATA;
         frame.writeUInt32BE(connId, 1);

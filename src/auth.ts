@@ -738,12 +738,41 @@ export const generateAdminJWT = (actor = "admin_root"): string => {
   return `${data}.${signature}`;
 };
 
+// Persistent and In-Memory Token Revocation Blacklist & User Session Invalidation
+export const revokedTokenHashes = new Set<string>(); // sha256(token) -> revoked
+export const userRevocationEpochMap = new Map<string, number>(); // userId -> epochSeconds
+
 /**
- * Verifies and decodes a JWT token
+ * Immediately invalidates a specific JWT token
+ */
+export const revokeToken = (token: string) => {
+  if (token) {
+    const hash = crypto.createHash("sha256").update(token.trim()).digest("hex");
+    revokedTokenHashes.add(hash);
+  }
+};
+
+/**
+ * Immediately revokes all active tokens issued to a user prior to now
+ */
+export const revokeAllUserTokens = (userId: string) => {
+  if (userId) {
+    userRevocationEpochMap.set(userId.trim(), Math.floor(Date.now() / 1000));
+  }
+};
+
+/**
+ * Verifies and decodes a JWT token with instantaneous revocation check
  */
 export const verifyJWT = (token: string): { sub: string; email: string; licenseKey: string; role?: string; actor?: string; serverSlots?: number } | null => {
   try {
-    const parts = token.split(".");
+    const cleanToken = token.trim();
+    const tokenHash = crypto.createHash("sha256").update(cleanToken).digest("hex");
+    if (revokedTokenHashes.has(tokenHash)) {
+      return null; // Token explicitly revoked via logout or admin action
+    }
+
+    const parts = cleanToken.split(".");
     if (parts.length !== 3) return null;
 
     const headerB64 = parts[0];
@@ -772,6 +801,14 @@ export const verifyJWT = (token: string): { sub: string; email: string; licenseK
 
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
       return null; // Expired token
+    }
+
+    // Check if all sessions for this user were invalidated
+    if (payload.sub && userRevocationEpochMap.has(payload.sub)) {
+      const revokedAfter = userRevocationEpochMap.get(payload.sub)!;
+      if (payload.iat && payload.iat < revokedAfter) {
+        return null; // Issued before revocation epoch
+      }
     }
 
     return payload;
