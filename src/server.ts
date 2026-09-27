@@ -487,9 +487,83 @@ export const loadServersFromDisk = () => {
       }
     }
   } catch (err) {
-    console.error("Failed to load servers database from disk:", err);
+// Persistent Client & Launcher Telemetry Store
+export interface ClientDeviceTelemetry {
+  deviceHash: string; // Hashed with sha256 for privacy
+  platform: string;
+  version: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  launchCount: number;
+}
+
+const TELEMETRY_DB_FILE = path.resolve(getDataDir(), "telemetry.json");
+export const clientDeviceStore = new Map<string, ClientDeviceTelemetry>();
+export let totalClientLaunches = 0;
+export let totalLauncherDownloads = 0;
+
+export const saveTelemetryToDisk = () => {
+  try {
+    const data = {
+      totalClientLaunches,
+      totalLauncherDownloads,
+      devices: Array.from(clientDeviceStore.entries()),
+      savedAt: Date.now()
+    };
+    fs.writeFileSync(TELEMETRY_DB_FILE, JSON.stringify(data, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save telemetry to disk:", err);
   }
 };
+
+export const loadTelemetryFromDisk = () => {
+  try {
+    if (fs.existsSync(TELEMETRY_DB_FILE)) {
+      const raw = fs.readFileSync(TELEMETRY_DB_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      totalClientLaunches = Number(parsed.totalClientLaunches) || 0;
+      totalLauncherDownloads = Number(parsed.totalLauncherDownloads) || 0;
+      if (Array.isArray(parsed.devices)) {
+        for (const [k, v] of parsed.devices) {
+          clientDeviceStore.set(k, v);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load telemetry from disk:", err);
+  }
+};
+loadTelemetryFromDisk();
+
+export function recordClientOpen(rawIdentifier?: string, version = "1.0.4", platform = "windows") {
+  totalClientLaunches++;
+  const safeId = (rawIdentifier && rawIdentifier.trim().length > 0)
+    ? rawIdentifier.trim()
+    : crypto.randomBytes(8).toString("hex");
+  
+  // Privacy & Safety: Always hash hardware ID / IP before persisting
+  const deviceHash = crypto.createHash("sha256").update(safeId).digest("hex").substring(0, 16);
+  const now = Date.now();
+  
+  const existing = clientDeviceStore.get(deviceHash);
+  if (existing) {
+    existing.lastSeenAt = now;
+    existing.launchCount += 1;
+    existing.version = version;
+    existing.platform = platform;
+  } else {
+    clientDeviceStore.set(deviceHash, {
+      deviceHash,
+      platform,
+      version,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      launchCount: 1
+    });
+  }
+  
+  saveTelemetryToDisk();
+}
 
 // Sanitizer for untrusted string inputs
 const sanitizeString = (val: unknown, maxLen = 128): string => {
@@ -1222,8 +1296,13 @@ fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manif
   };
 });
 
-// 8. Latest Updates & Auto-Updater Matrix
-fastify.get("/api/v1/updates/latest", async () => {
+// 8. Latest Updates & Auto-Updater Matrix (with integrated client open telemetry)
+fastify.get("/api/v1/updates/latest", async (request) => {
+  const hwid = (request.headers["x-svl-hwid"] || request.headers["x-client-device-fingerprint"]) as string | undefined;
+  const ver = (request.headers["x-svl-version"] || "1.0.4") as string;
+  const platform = (request.headers["x-svl-platform"] || "windows") as string;
+  recordClientOpen(hwid || request.ip, ver, platform);
+
   return {
     client: {
       version: "1.0.4",
@@ -1255,12 +1334,31 @@ fastify.get("/api/v1/updates/latest", async () => {
   };
 });
 
-// Download Redirection / Direct Serve Routes
+// 8b. Dedicated Client Launcher Heartbeat / Telemetry Ping
+fastify.post<{ Body: { hwid?: string; version?: string; platform?: string } }>("/api/v1/telemetry/heartbeat", {
+  config: {
+    rateLimit: {
+      max: 60,
+      timeWindow: "1 minute"
+    }
+  }
+}, async (request) => {
+  const { hwid, version, platform } = request.body || {};
+  const clientHwid = hwid || (request.headers["x-svl-hwid"] as string) || request.ip;
+  recordClientOpen(clientHwid, version || "1.0.4", platform || "windows");
+  return { success: true, timestamp: Date.now() };
+});
+
+// Download Redirection / Direct Serve Routes with download counter
 fastify.get("/download", async (_request, reply) => {
+  totalLauncherDownloads++;
+  saveTelemetryToDisk();
   return reply.redirect("/downloads/svl-connect-windows-x64.zip", 302);
 });
 
 fastify.get("/api/v1/download/launcher", async (_request, reply) => {
+  totalLauncherDownloads++;
+  saveTelemetryToDisk();
   return reply.redirect("/downloads/svl-connect-windows-x64.zip", 302);
 });
 
@@ -2351,6 +2449,33 @@ fastify.get("/api/v1/admin/overview", { preHandler: [requireAdminAuth] }, async 
     }
   }
 
+  // Calculate live active clients in last 5 minutes (300,000 ms)
+  let activeClientsNow = 0;
+  const platformDistribution: Record<string, number> = {};
+  const versionDistribution: Record<string, number> = {};
+  const recentDeviceList: any[] = [];
+
+  for (const dev of clientDeviceStore.values()) {
+    const isLive = (now - dev.lastSeenAt) < 5 * 60 * 1000;
+    if (isLive) {
+      activeClientsNow++;
+    }
+    platformDistribution[dev.platform] = (platformDistribution[dev.platform] || 0) + 1;
+    versionDistribution[dev.version] = (versionDistribution[dev.version] || 0) + 1;
+    
+    recentDeviceList.push({
+      deviceHash: dev.deviceHash, // anonymized 16-char hash for public privacy
+      platform: dev.platform,
+      version: dev.version,
+      launches: dev.launchCount,
+      lastSeenAt: dev.lastSeenAt,
+      firstSeenAt: dev.firstSeenAt,
+      isLive
+    });
+  }
+
+  recentDeviceList.sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+
   return {
     stats: {
       totalServers: serverStore.size,
@@ -2359,10 +2484,43 @@ fastify.get("/api/v1/admin/overview", { preHandler: [requireAdminAuth] }, async 
       totalUsers: userStore.size,
       totalLicenses: licenseStore.size,
       onlinePlayers: totalPlayers,
+      
+      // Client Launcher Metrics
+      totalClientLaunches,
+      uniqueClientDevices: clientDeviceStore.size,
+      activeClientsNow,
+      totalLauncherDownloads,
+      platformDistribution,
+      versionDistribution,
+
+      // Live Tunnels & System Security
+      activeTunnels: relayServer.getAllTunnels().length,
+      activeLockouts: adminIpLockoutMap.size,
       systemUptimeSeconds: Math.floor(process.uptime()),
       memoryUsageMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
       nodeVersion: process.version
-    }
+    },
+    recentClients: recentDeviceList.slice(0, 100)
+  };
+});
+
+fastify.get("/api/v1/admin/telemetry", { preHandler: [requireAdminAuth] }, async () => {
+  const now = Date.now();
+  const devices = Array.from(clientDeviceStore.values()).map(dev => ({
+    deviceHash: dev.deviceHash,
+    platform: dev.platform,
+    version: dev.version,
+    launches: dev.launchCount,
+    lastSeenAt: dev.lastSeenAt,
+    firstSeenAt: dev.firstSeenAt,
+    isLive: (now - dev.lastSeenAt) < 5 * 60 * 1000
+  }));
+  devices.sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+  return {
+    totalLaunches: totalClientLaunches,
+    totalDownloads: totalLauncherDownloads,
+    uniqueDevices: clientDeviceStore.size,
+    devices
   };
 });
 

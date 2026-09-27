@@ -269,24 +269,36 @@
       <!-- KPI Overview Cards -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-title">🌐 Registered Servers</div>
-          <div id="kpi-total-servers" class="kpi-value">0</div>
+          <div class="kpi-title">🚀 Launcher Opens</div>
+          <div id="kpi-client-launches" class="kpi-value" style="color: #6366f1;">0</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-title">🟢 Active Online</div>
-          <div id="kpi-online-servers" class="kpi-value" style="color: #10b981;">0</div>
+          <div class="kpi-title">💻 Unique Devices</div>
+          <div id="kpi-unique-devices" class="kpi-value" style="color: #38bdf8;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">🟢 Clients Active Now</div>
+          <div id="kpi-active-clients" class="kpi-value" style="color: #10b981;">0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">👥 Connected Players</div>
-          <div id="kpi-online-players" class="kpi-value" style="color: #38bdf8;">0</div>
+          <div id="kpi-online-players" class="kpi-value" style="color: #fbbf24;">0</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-title">🚫 Banned Servers</div>
-          <div id="kpi-banned-servers" class="kpi-value" style="color: #f87171;">0</div>
+          <div class="kpi-title">🌐 Live Servers</div>
+          <div id="kpi-online-servers" class="kpi-value" style="color: #a78bfa;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">📥 Total Downloads</div>
+          <div id="kpi-launcher-downloads" class="kpi-value" style="color: #f472b6;">0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">🔑 Total Licenses</div>
           <div id="kpi-total-licenses" class="kpi-value" style="color: #c084fc;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">🛡️ Security Lockouts</div>
+          <div id="kpi-active-lockouts" class="kpi-value" style="color: #f87171;">0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">⚡ Server Memory</div>
@@ -297,6 +309,7 @@
       <!-- Tab Navigation -->
       <div class="admin-tabs">
         <button class="admin-tab-btn active" data-tab="tab-servers">🖥️ Servers Overlook</button>
+        <button class="admin-tab-btn" data-tab="tab-telemetry">💻 Client &amp; Launcher Telemetry</button>
         <button class="admin-tab-btn" data-tab="tab-licenses">🔑 License Registry</button>
         <button class="admin-tab-btn" data-tab="tab-audit">🔒 Security Audit Trail</button>
       </div>
@@ -342,7 +355,58 @@
         </div>
       </section>
 
-      <!-- TAB 2: LICENSE REGISTRY -->
+      <!-- TAB 2: CLIENT & LAUNCHER TELEMETRY -->
+      <section id="tab-telemetry" class="admin-tab-pane hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap;">
+          <div>
+            <h4 style="margin: 0 0 4px 0; font-size: 15px; color: #fff;">Client &amp; Launcher Installations</h4>
+            <p style="margin: 0; font-size: 12px; color: #71717a;">
+              Zero-PII telemetry: Device IDs and IP fingerprints are irreversible SHA-256 digests. Safe for public repository exposure.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="filter-telemetry" class="form-input" placeholder="🔍 Search device hash, platform, version..." style="max-width: 320px; font-size: 13px;">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px;">
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--admin-border); border-radius: 10px; padding: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: #a1a1aa; margin-bottom: 8px; text-transform: uppercase;">Platform Breakdown</div>
+            <div id="telemetry-platforms" style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px;">
+              <span style="color: #71717a;">Loading platform telemetry...</span>
+            </div>
+          </div>
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--admin-border); border-radius: 10px; padding: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: #a1a1aa; margin-bottom: 8px; text-transform: uppercase;">Active Launcher Versions</div>
+            <div id="telemetry-versions" style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px;">
+              <span style="color: #71717a;">Loading version distribution...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Device Pseudonym (SHA-256)</th>
+                <th>Platform / OS</th>
+                <th>Launcher Version</th>
+                <th>Total Launches</th>
+                <th>First Seen</th>
+                <th>Last Active</th>
+              </tr>
+            </thead>
+            <tbody id="telemetry-table-body">
+              <tr>
+                <td colspan="7" style="text-align: center; color: #71717a; padding: 24px;">Loading client telemetry...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: LICENSE REGISTRY -->
       <section id="tab-licenses" class="admin-tab-pane hidden">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap;">
           <input type="text" id="filter-licenses" class="form-input" placeholder="🔍 Search licenses by key, email, tier..." style="max-width: 400px; font-size: 13px;">

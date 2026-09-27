@@ -14,6 +14,8 @@ let adminToken = "";
 let globalServers = [];
 let globalLicenses = [];
 let globalAuditLogs = [];
+let globalTelemetry = [];
+let globalTelemetryStats = {};
 let autoRefreshTimer = null;
 
 function escapeHtml(str) {
@@ -72,6 +74,11 @@ function initAdminApp() {
   const serverStatusSelect = document.getElementById("filter-server-status");
   if (serverStatusSelect) {
     serverStatusSelect.addEventListener("change", renderServersTable);
+  }
+
+  const telemetrySearch = document.getElementById("filter-telemetry");
+  if (telemetrySearch) {
+    telemetrySearch.addEventListener("input", renderTelemetryTable);
   }
 
   const licenseSearch = document.getElementById("filter-licenses");
@@ -206,11 +213,12 @@ async function loadAllAdminData(showNotice = false) {
     const headers = {};
     if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
 
-    const [overviewRes, serversRes, licensesRes, auditRes] = await Promise.all([
+    const [overviewRes, serversRes, licensesRes, auditRes, telemetryRes] = await Promise.all([
       fetch("/api/v1/admin/overview", { headers, credentials: "include" }),
       fetch("/api/v1/admin/servers", { headers, credentials: "include" }),
       fetch("/api/v1/admin/licenses", { headers, credentials: "include" }),
-      fetch("/api/v1/admin/audit-logs", { headers, credentials: "include" })
+      fetch("/api/v1/admin/audit-logs", { headers, credentials: "include" }),
+      fetch("/api/v1/admin/telemetry", { headers, credentials: "include" })
     ]);
 
     if (overviewRes.status === 401 || overviewRes.status === 403) {
@@ -222,6 +230,7 @@ async function loadAllAdminData(showNotice = false) {
     const serversData = await serversRes.json();
     const licensesData = await licensesRes.json();
     const auditData = await auditRes.json();
+    const telemetryData = telemetryRes.ok ? await telemetryRes.json() : { clients: [], stats: {} };
 
     renderOverview(overviewData.stats);
 
@@ -233,6 +242,11 @@ async function loadAllAdminData(showNotice = false) {
 
     globalAuditLogs = auditData.logs || [];
     renderAuditTable();
+
+    globalTelemetry = telemetryData.clients || [];
+    globalTelemetryStats = telemetryData.stats || overviewData.stats || {};
+    renderTelemetryBreakdown();
+    renderTelemetryTable();
 
     if (showNotice) showToast("Admin data refreshed.");
   } catch (err) {
@@ -247,11 +261,14 @@ function renderOverview(stats) {
     if (el) el.innerText = val;
   };
 
-  setVal("kpi-total-servers", stats.totalServers || 0);
-  setVal("kpi-online-servers", stats.onlineServers || 0);
-  setVal("kpi-online-players", stats.onlinePlayers || 0);
-  setVal("kpi-banned-servers", stats.bannedServers || 0);
-  setVal("kpi-total-licenses", stats.totalLicenses || 0);
+  setVal("kpi-client-launches", Number(stats.totalClientLaunches || 0).toLocaleString());
+  setVal("kpi-unique-devices", Number(stats.uniqueClientDevices || 0).toLocaleString());
+  setVal("kpi-active-clients", Number(stats.activeClientsNow || 0).toLocaleString());
+  setVal("kpi-online-players", Number(stats.onlinePlayers || 0).toLocaleString());
+  setVal("kpi-online-servers", Number(stats.onlineServers || 0).toLocaleString());
+  setVal("kpi-launcher-downloads", Number(stats.launcherDownloads || 0).toLocaleString());
+  setVal("kpi-total-licenses", Number(stats.totalLicenses || 0).toLocaleString());
+  setVal("kpi-active-lockouts", Number(stats.activeLockouts || 0).toLocaleString());
   setVal("kpi-memory", `${stats.memoryUsageMB || 0} MB`);
 }
 
@@ -349,6 +366,116 @@ function renderServersTable() {
             <button class="btn-action btn-action-danger" onclick="deleteServer('${safeKey}')" title="Delete server entry">🗑️</button>
           </div>
         </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderTelemetryBreakdown() {
+  const platformsContainer = document.getElementById("telemetry-platforms");
+  const versionsContainer = document.getElementById("telemetry-versions");
+
+  if (platformsContainer) {
+    const platforms = globalTelemetryStats.platformBreakdown || {};
+    const total = Object.values(platforms).reduce((a, b) => a + b, 0) || 1;
+    const entries = Object.entries(platforms);
+    if (entries.length === 0) {
+      platformsContainer.innerHTML = `<span style="color: #71717a;">No platform data recorded yet.</span>`;
+    } else {
+      platformsContainer.innerHTML = entries.map(([os, count]) => {
+        const pct = Math.round((count / total) * 100);
+        let icon = "💻";
+        if (os.toLowerCase().includes("win")) icon = "🪟";
+        else if (os.toLowerCase().includes("mac") || os.toLowerCase().includes("darwin")) icon = "🍎";
+        else if (os.toLowerCase().includes("linux")) icon = "🐧";
+
+        return `
+          <div style="background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+            <span>${icon}</span>
+            <strong style="color: #fff;">${escapeHtml(os)}</strong>
+            <span style="color: #38bdf8; font-family: monospace;">${count}</span>
+            <span style="color: #71717a; font-size: 11px;">(${pct}%)</span>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  if (versionsContainer) {
+    const versions = globalTelemetryStats.topVersions || {};
+    const entries = Object.entries(versions);
+    if (entries.length === 0) {
+      versionsContainer.innerHTML = `<span style="color: #71717a;">No launcher version data recorded yet.</span>`;
+    } else {
+      versionsContainer.innerHTML = entries.map(([ver, count]) => {
+        return `
+          <div style="background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+            <span style="color: #a78bfa;">📦</span>
+            <strong style="font-family: monospace; color: #fff;">v${escapeHtml(ver)}</strong>
+            <span style="color: #34d399; font-family: monospace;">${count} devices</span>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+}
+
+function renderTelemetryTable() {
+  const tbody = document.getElementById("telemetry-table-body");
+  if (!tbody) return;
+
+  const searchInput = document.getElementById("filter-telemetry");
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  const filtered = globalTelemetry.filter(client => {
+    if (!query) return true;
+    const matchHash = client.deviceHash?.toLowerCase().includes(query);
+    const matchPlatform = client.platform?.toLowerCase().includes(query);
+    const matchVersion = client.launcherVersion?.toLowerCase().includes(query);
+    return matchHash || matchPlatform || matchVersion;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #71717a; padding: 24px;">No matching client telemetry found.</td></tr>`;
+    return;
+  }
+
+  const now = Date.now();
+  tbody.innerHTML = filtered.map(client => {
+    const lastActiveMs = client.lastSeen ? new Date(client.lastSeen).getTime() : 0;
+    const diffSec = Math.max(0, Math.floor((now - lastActiveMs) / 1000));
+    
+    // Status based on recent activity (<= 5 min = online, <= 1 hour = recent)
+    let statusHtml = "";
+    if (diffSec <= 300) {
+      statusHtml = `<span class="status-badge status-online">🟢 Active Now</span>`;
+    } else if (diffSec <= 3600) {
+      statusHtml = `<span class="status-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">🟡 Recent</span>`;
+    } else {
+      statusHtml = `<span class="status-badge status-offline">⚪ Inactive</span>`;
+    }
+
+    const safeHash = escapeHtml(client.deviceHash || "anonymous");
+    const safePlatform = escapeHtml(client.platform || "unknown");
+    const safeVersion = escapeHtml(client.launcherVersion || "1.0.0");
+    const launches = Number(client.launchCount) || 1;
+    const firstSeenStr = client.firstSeen ? escapeHtml(new Date(client.firstSeen).toLocaleDateString()) : "—";
+    
+    let lastSeenStr = "—";
+    if (diffSec < 60) lastSeenStr = "Just now";
+    else if (diffSec < 3600) lastSeenStr = `${Math.floor(diffSec / 60)}m ago`;
+    else if (diffSec < 86400) lastSeenStr = `${Math.floor(diffSec / 3600)}h ago`;
+    else lastSeenStr = escapeHtml(new Date(client.lastSeen).toLocaleDateString());
+
+    return `
+      <tr>
+        <td>${statusHtml}</td>
+        <td><strong style="font-family: monospace; color: #6366f1;">#${safeHash}</strong></td>
+        <td><span style="color: #e4e4e7;">${safePlatform}</span></td>
+        <td><span style="font-family: monospace; color: #38bdf8;">v${safeVersion}</span></td>
+        <td><span style="font-weight: 700; color: #fff;">${launches}</span></td>
+        <td style="font-size: 12px; color: #71717a;">${firstSeenStr}</td>
+        <td style="font-size: 12px; color: #a1a1aa;">${lastSeenStr}</td>
       </tr>
     `;
   }).join("");
