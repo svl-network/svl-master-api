@@ -487,6 +487,10 @@ export const loadServersFromDisk = () => {
       }
     }
   } catch (err) {
+    console.error("Failed to load servers database from disk:", err);
+  }
+};
+
 // Persistent Client & Launcher Telemetry Store
 export interface ClientDeviceTelemetry {
   deviceHash: string; // Hashed with sha256 for privacy
