@@ -553,6 +553,7 @@ export class RelayServer {
       if (tunnel.ws.readyState === WebSocket.OPEN) {
         if (tunnel.ws.bufferedAmount > WS_BUFFER_CRITICAL_OOM) {
           // Client flooding socket faster than upstream bridge can consume - drop to protect memory
+          console.warn(`🚨 [SECURITY ALERT] Critical OOM ceiling exceeded (${tunnel.ws.bufferedAmount} bytes) on tunnel '${tunnel.serverKey}' from client IP: ${clientIp}. Dropping connection.`);
           clientSocket.destroy();
           return;
         }
