@@ -1323,7 +1323,7 @@ fastify.get("/api/v1/updates/latest", async (request) => {
       changelog: "SVL Connect v1.0.4: Hardened anti-ban IP isolation, friendly random key resolution, automatic background update detection."
     },
     bridge: {
-      version: "2.3.0",
+      version: "2.4.2",
       url: "https://realms.sunveil.net/releases.html",
       downloadUrl: "https://realms.sunveil.net/downloads/svl-bridge-paper.jar",
       downloads: {
