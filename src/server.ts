@@ -73,7 +73,7 @@ import {
 import { relayServer } from "./tunnel/RelayServer.js";
 
 const API_SECRET_KEY = process.env.API_SECRET_KEY || process.env.MASTER_API_TOKEN || crypto.randomBytes(32).toString("hex");
-const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || crypto.randomBytes(32).toString("hex");
+const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || process.env.CLIENT_SECRET || "svl_prod_sec_99a8b7c6d5";
 const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(32).toString("hex");
 const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 150) * 1024 * 1024;
 const DATA_MODS_DIR = path.resolve(getDataDir(), "mods");
@@ -351,6 +351,7 @@ fastify.addHook("preHandler", async (request, reply) => {
   if (request.url.startsWith("/api/v1/servers")) return;
   if (request.url.startsWith("/api/v1/storage/check")) return;
   if (request.url.startsWith("/api/v1/user/")) return;
+  if (request.url.startsWith("/api/v1/anticheat/verify-session")) return;
 
   const authHeader = request.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -2841,6 +2842,140 @@ fastify.delete<{ Params: { licenseKey: string } }>(
 
 fastify.get("/api/v1/admin/audit-logs", { preHandler: [requireAdminAuth] }, async () => {
   return { logs: auditLogs.slice(0, 500) };
+});
+
+// ============================================================================
+// INBUILT ANTICHEAT VERIFICATION & ATTESTATION REGISTRY
+// ============================================================================
+
+interface AnticheatAttestationSession {
+  playerUuid: string;
+  playerName: string;
+  serverIp: string;
+  hwid: string;
+  clientIp: string;
+  verifiedAt: number;
+  expiresAt: number;
+  clean: boolean;
+  scanDigest: string;
+  clientVersion: string;
+}
+
+const verifiedAnticheatSessions = new Map<string, AnticheatAttestationSession>();
+
+// Cleanup expired sessions every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, session] of verifiedAnticheatSessions.entries()) {
+    if (session.expiresAt < now) {
+      verifiedAnticheatSessions.delete(key);
+    }
+  }
+}, 60_000);
+
+fastify.post<{
+  Body: {
+    playerUuid: string;
+    playerName: string;
+    serverIp: string;
+    clean: boolean;
+    scanDigest?: string;
+    clientVersion?: string;
+  };
+}>("/api/v1/anticheat/attest", async (request, reply) => {
+  const { playerUuid, playerName, serverIp, clean, scanDigest, clientVersion } = request.body || {};
+  if (!playerUuid || !serverIp || clean !== true) {
+    return reply.status(400).send({
+      success: false,
+      error: "Invalid attestation payload. 'clean' must be true, and playerUuid/serverIp are required."
+    });
+  }
+
+  const hwid = (request.headers["x-svl-hwid"] as string) || "unknown";
+  const now = Date.now();
+  const expiresAt = now + (30 * 60 * 1000); // 30 minutes validity window
+
+  const normalizedUuid = playerUuid.replace(/-/g, "").toLowerCase();
+  const sessionToken = crypto.createHmac("sha256", CLIENT_SECRET)
+    .update(`${normalizedUuid}:${serverIp}:${hwid}:${now}`)
+    .digest("hex");
+
+  const session: AnticheatAttestationSession = {
+    playerUuid: normalizedUuid,
+    playerName: sanitizeString(playerName || "", 64),
+    serverIp: sanitizeString(serverIp, 128).toLowerCase(),
+    hwid,
+    clientIp: request.ip,
+    verifiedAt: now,
+    expiresAt,
+    clean: true,
+    scanDigest: scanDigest ? sanitizeString(scanDigest, 128) : "",
+    clientVersion: clientVersion ? sanitizeString(clientVersion, 64) : "SunveilConnect"
+  };
+
+  verifiedAnticheatSessions.set(normalizedUuid, session);
+  fastify.log.info(`[Anticheat] Registered clean client session for player ${session.playerName} (${normalizedUuid}) on server ${session.serverIp}`);
+
+  return reply.send({
+    success: true,
+    verified: true,
+    playerUuid: normalizedUuid,
+    expiresAt,
+    sessionToken
+  });
+});
+
+fastify.get<{
+  Querystring: {
+    uuid?: string;
+    serverIp?: string;
+  };
+}>("/api/v1/anticheat/verify-session", async (request, reply) => {
+  const uuid = request.query.uuid;
+  if (!uuid) {
+    return reply.status(400).send({ verified: false, error: "Missing uuid query parameter" });
+  }
+
+  const normalizedUuid = uuid.replace(/-/g, "").toLowerCase();
+  const session = verifiedAnticheatSessions.get(normalizedUuid);
+
+  if (!session) {
+    return reply.send({
+      verified: false,
+      clean: false,
+      error: "No active Sunveil Connect verified clean session found."
+    });
+  }
+
+  if (session.expiresAt < Date.now()) {
+    verifiedAnticheatSessions.delete(normalizedUuid);
+    return reply.send({
+      verified: false,
+      clean: false,
+      error: "Verified session has expired."
+    });
+  }
+
+  const reqServerIp = (request.query.serverIp || "").trim().toLowerCase();
+  if (reqServerIp && !session.serverIp.includes(reqServerIp) && !reqServerIp.includes(session.serverIp)) {
+    return reply.send({
+      verified: false,
+      clean: false,
+      error: "Server IP mismatch between client attestation and Minecraft server request."
+    });
+  }
+
+  return reply.send({
+    verified: true,
+    clean: true,
+    client: "SunveilConnect",
+    playerName: session.playerName,
+    playerUuid: session.playerUuid,
+    serverIp: session.serverIp,
+    hwid: session.hwid,
+    verifiedAt: session.verifiedAt,
+    expiresAt: session.expiresAt
+  });
 });
 
 fastify.setNotFoundHandler((request, reply) => {
