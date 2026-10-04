@@ -73,7 +73,7 @@ import {
 import { relayServer } from "./tunnel/RelayServer.js";
 
 const API_SECRET_KEY = process.env.API_SECRET_KEY || process.env.MASTER_API_TOKEN || crypto.randomBytes(32).toString("hex");
-const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || process.env.CLIENT_SECRET || "svl_prod_sec_99a8b7c6d5";
+const CLIENT_SECRET = process.env.SVL_CLIENT_SECRET || process.env.CLIENT_SECRET || "";
 const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(32).toString("hex");
 const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 150) * 1024 * 1024;
 const DATA_MODS_DIR = path.resolve(getDataDir(), "mods");
@@ -366,7 +366,7 @@ fastify.addHook("preHandler", async (request, reply) => {
   const clientSecret = request.headers["x-svl-client-secret"];
   const hwid = request.headers["x-svl-hwid"];
 
-  if (!clientSecret || clientSecret !== CLIENT_SECRET) {
+  if (CLIENT_SECRET && (!clientSecret || clientSecret !== CLIENT_SECRET)) {
     fastify.log.warn(`Unauthorized access attempt from IP: ${request.ip}`);
     return reply.status(403).send({
       statusCode: 403,
