@@ -352,6 +352,7 @@ fastify.addHook("preHandler", async (request, reply) => {
   if (request.url.startsWith("/api/v1/storage/check")) return;
   if (request.url.startsWith("/api/v1/user/")) return;
   if (request.url.startsWith("/api/v1/anticheat/verify-session")) return;
+  if (request.url.startsWith("/api/v1/capes") || request.url.startsWith("/api/capes")) return;
 
   const authHeader = request.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -1366,6 +1367,134 @@ fastify.get("/api/v1/download/launcher", async (_request, reply) => {
   saveTelemetryToDisk();
   return reply.redirect("/downloads/svl-connect-windows-x64.zip", 302);
 });
+
+// ============================================================
+// 8c. Sunveil Capes & Verified Client Users Registry
+// ============================================================
+const CAPES_DATA_DIR = path.resolve(getDataDir(), "capes");
+const CAPES_DB_FILE = path.resolve(getDataDir(), "capes_db.json");
+
+if (!fs.existsSync(CAPES_DATA_DIR)) {
+  fs.mkdirSync(CAPES_DATA_DIR, { recursive: true });
+}
+
+let playerCapes: Record<string, string> = {};
+try {
+  if (fs.existsSync(CAPES_DB_FILE)) {
+    playerCapes = JSON.parse(fs.readFileSync(CAPES_DB_FILE, "utf-8"));
+  } else {
+    const webhostDb = path.resolve(APP_ROOT, "..", "Sunveil-Webhost", "capes_db.json");
+    if (fs.existsSync(webhostDb)) {
+      playerCapes = JSON.parse(fs.readFileSync(webhostDb, "utf-8"));
+      fs.writeFileSync(CAPES_DB_FILE, JSON.stringify(playerCapes, null, 2), "utf-8");
+    }
+  }
+} catch {
+  playerCapes = {};
+}
+
+function saveCapesToDisk() {
+  try {
+    fs.writeFileSync(CAPES_DB_FILE, JSON.stringify(playerCapes, null, 2), "utf-8");
+  } catch (e) {
+    console.error("[MasterAPI:Capes] Failed to save capes_db.json:", e);
+  }
+}
+
+const handleGetCapeUsers = async () => {
+  return {
+    success: true,
+    users: Object.keys(playerCapes)
+  };
+};
+
+const handleGetCapeInfo = async (request: FastifyRequest<{ Params: { uuid: string } }>, reply: FastifyReply) => {
+  const rawUuid = request.params.uuid.toLowerCase().replace(/-/g, "").replace(".png", "");
+  const cape = playerCapes[rawUuid];
+  if (!cape) {
+    return reply.status(404).send({ success: false, error: "User does not use Sunveil Client" });
+  }
+  return {
+    success: true,
+    uuid: rawUuid,
+    cape: cape,
+    url: `/api/v1/capes/${rawUuid}.png`
+  };
+};
+
+const handleGetCapeTexture = async (request: FastifyRequest<{ Params: { uuid: string } }>, reply: FastifyReply) => {
+  const rawUuid = request.params.uuid.toLowerCase().replace(/-/g, "");
+  const selectedCape = playerCapes[rawUuid];
+  if (!selectedCape) {
+    return reply.status(404).send({ error: "Player does not use Sunveil Client" });
+  }
+
+  // 1. Check custom user uploaded cape texture
+  const customPath = path.join(CAPES_DATA_DIR, `${rawUuid}.png`);
+  if (fs.existsSync(customPath)) {
+    return reply.header("Cache-Control", "public, max-age=60").type("image/png").send(fs.createReadStream(customPath));
+  }
+
+  // 2. Check official selected cape in data directory
+  const officialPath = path.join(CAPES_DATA_DIR, `${selectedCape}.png`);
+  if (fs.existsSync(officialPath)) {
+    return reply.header("Cache-Control", "public, max-age=3600").type("image/png").send(fs.createReadStream(officialPath));
+  }
+
+  // 3. Check public capes
+  const publicPath = path.resolve(PUBLIC_DIR, "capes", `${selectedCape}.png`);
+  if (fs.existsSync(publicPath)) {
+    return reply.header("Cache-Control", "public, max-age=3600").type("image/png").send(fs.createReadStream(publicPath));
+  }
+
+  // 4. Default fallback if specific asset file is missing
+  const defaultPath = path.join(CAPES_DATA_DIR, "solar_emerald.png");
+  if (fs.existsSync(defaultPath)) {
+    return reply.header("Cache-Control", "public, max-age=3600").type("image/png").send(fs.createReadStream(defaultPath));
+  }
+
+  return reply.status(404).send({ error: "Cape texture not found" });
+};
+
+const handleUpdateCape = async (
+  request: FastifyRequest<{ Params: { uuid: string }; Body: { cape?: string; textureBase64?: string } }>,
+  reply: FastifyReply
+) => {
+  const rawUuid = request.params.uuid.toLowerCase().replace(/-/g, "");
+  const { cape, textureBase64 } = (request.body || {}) as { cape?: string; textureBase64?: string };
+
+  if (!cape && !textureBase64) {
+    return reply.status(400).send({ error: "Missing cape identifier or textureBase64" });
+  }
+
+  if (textureBase64) {
+    try {
+      const buffer = Buffer.from(textureBase64.replace(/^data:image\/png;base64,/, ""), "base64");
+      const customPath = path.join(CAPES_DATA_DIR, `${rawUuid}.png`);
+      fs.writeFileSync(customPath, buffer);
+      playerCapes[rawUuid] = "custom";
+    } catch {
+      return reply.status(500).send({ error: "Failed to write custom cape texture" });
+    }
+  } else if (cape) {
+    playerCapes[rawUuid] = cape;
+  }
+
+  saveCapesToDisk();
+  return { success: true, uuid: rawUuid, cape: playerCapes[rawUuid] };
+};
+
+fastify.get("/api/v1/capes/users", handleGetCapeUsers);
+fastify.get("/api/capes/users", handleGetCapeUsers);
+
+fastify.get<{ Params: { uuid: string } }>("/api/v1/capes/:uuid", handleGetCapeInfo);
+fastify.get<{ Params: { uuid: string } }>("/api/capes/:uuid", handleGetCapeInfo);
+
+fastify.get<{ Params: { uuid: string } }>("/api/v1/capes/:uuid.png", handleGetCapeTexture);
+fastify.get<{ Params: { uuid: string } }>("/api/capes/:uuid.png", handleGetCapeTexture);
+
+fastify.post<{ Params: { uuid: string }; Body: { cape?: string; textureBase64?: string } }>("/api/v1/capes/:uuid", handleUpdateCape);
+fastify.post<{ Params: { uuid: string }; Body: { cape?: string; textureBase64?: string } }>("/api/capes/:uuid", handleUpdateCape);
 
 // User JWT Authentication Pre-Handler
 const requireUserAuth = async (request: FastifyRequest, reply: FastifyReply) => {
