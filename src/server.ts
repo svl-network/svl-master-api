@@ -664,6 +664,23 @@ export function validateSubdomainOrKey(name: string): { valid: boolean; error?: 
   return { valid: true };
 }
 
+export const MIN_CLIENT_VERSION = "1.0.9";
+export const MIN_BRIDGE_VERSION = "2.4.0";
+
+export function compareSemver(v1: string, v2: string): number {
+  const parse = (v: string): [number, number, number] => {
+    const match = (v || "").trim().replace(/^v/i, "").match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    if (!match) return [0, 0, 0];
+    return [parseInt(match[1] || "0", 10), parseInt(match[2] || "0", 10), parseInt(match[3] || "0", 10)];
+  };
+  const p1 = parse(v1);
+  const p2 = parse(v2);
+
+  if (p1[0] !== p2[0]) return p1[0] - p2[0];
+  if (p1[1] !== p2[1]) return p1[1] - p2[1];
+  return p1[2] - p2[2];
+}
+
 export function isServerKeyClaimed(serverKey: string, currentUserId?: string): boolean {
   const cleanKey = serverKey.trim().toLowerCase();
 
@@ -1020,6 +1037,16 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
     });
   }
 
+  // Security Enforcement: Enforce minimum bridge version
+  const bridgeVer = (payload as any).bridgeVersion || (request.headers["x-svl-bridge-version"] as string) || "";
+  if (bridgeVer && compareSemver(bridgeVer, MIN_BRIDGE_VERSION) < 0) {
+    return reply.status(426).send({
+      statusCode: 426,
+      error: "Upgrade Required",
+      message: `Your SVL Bridge version (${bridgeVer}) is outdated and permanently blocked for security reasons. Please update svl-bridge to v2.4.2 or newer.`
+    });
+  }
+
   let rawServerKey = sanitizeString(payload.serverKey, 64);
   const authHeader = request.headers.authorization;
   const token = (request as any).authToken || (authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "");
@@ -1034,7 +1061,7 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
   // Link server to user account
   let matchedUser: User | undefined;
   for (const u of userStore.values()) {
-    if (u.licenseKey === token || (u.serverKey && u.serverKey === token) || (u.serverKeys && u.serverKeys.includes(rawServerKey))) {
+    if (u.licenseKey === token || (u.serverKeys && u.serverKeys.includes(rawServerKey))) {
       matchedUser = u;
       break;
     }
@@ -1359,6 +1386,17 @@ fastify.get("/api/v1/servers", {
 
 // 6. Manifest-Abruf
 fastify.get<{ Params: { serverKey: string } }>("/api/v1/servers/:serverKey/manifest", async (request, reply) => {
+  const clientVer = (request.headers["x-svl-version"] || request.headers["x-client-version"]) as string | undefined;
+  if (clientVer && compareSemver(clientVer, MIN_CLIENT_VERSION) < 0) {
+    return reply.status(426).send({
+      statusCode: 426,
+      error: "Upgrade Required",
+      message: `Security Enforcement: SVL Connect version ${clientVer} is outdated and permanently blocked for security reasons. Please update to v${MIN_CLIENT_VERSION} or newer to connect to servers.`,
+      minVersion: MIN_CLIENT_VERSION,
+      downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.9-Windows-x64-Portable.zip"
+    });
+  }
+
   const safeServerKey = sanitizeString(request.params.serverKey, 64);
   const srv = serverStore.get(safeServerKey);
   if (!srv) {
@@ -1401,7 +1439,8 @@ fastify.get("/api/v1/updates/latest", async (request) => {
   return {
     client: {
       version: "1.0.9",
-      mandatory: false,
+      minVersion: MIN_CLIENT_VERSION,
+      mandatory: true,
       url: "https://realms.sunveil.net/releases.html",
       downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.9-Windows-x64-Portable.zip",
       platforms: {
@@ -1411,10 +1450,12 @@ fastify.get("/api/v1/updates/latest", async (request) => {
           portableUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.9-Windows-x64-Portable.zip"
         }
       },
-      changelog: "SVL Connect v1.0.9: Complete client modding suite (GUIMove, KillEffects, RPC, Capes, Fullbright, Waypoints), redesigned launcher UI, inbuilt anticheat integrity attestation, and mod deduplication."
+      changelog: "CRITICAL SECURITY UPDATE: All legacy client versions prior to v1.0.9 have been permanently retired and blocked from network services due to security hardening. You must update to SVL Connect v1.0.9 to continue playing."
     },
     bridge: {
       version: "2.4.2",
+      minVersion: MIN_BRIDGE_VERSION,
+      mandatory: true,
       url: "https://realms.sunveil.net/releases.html",
       downloadUrl: "https://realms.sunveil.net/downloads/svl-bridge-paper.jar",
       downloads: {

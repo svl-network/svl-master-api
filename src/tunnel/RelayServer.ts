@@ -11,7 +11,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import net from "node:net";
 import crypto from "node:crypto";
-import { isValidToken } from "../server.js";
+import { isValidToken, compareSemver, MIN_BRIDGE_VERSION } from "../server.js";
 import { isAuthorizedForServerKey, isTokenLike, findUserByIdentifier } from "../auth.js";
 
 export interface ActiveTunnel {
@@ -462,6 +462,14 @@ export class RelayServer {
         }
 
         let serverKey = (url.searchParams.get("serverKey") || "").trim();
+
+        // Version Enforcement: Block legacy bridge versions (< 2.4.0)
+        const bridgeVer = url.searchParams.get("version") || url.searchParams.get("bridgeVersion") || (request.headers["x-svl-bridge-version"] as string) || "";
+        if (bridgeVer && compareSemver(bridgeVer, MIN_BRIDGE_VERSION) < 0) {
+          socket.write("HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain\r\n\r\nSecurity Policy: Legacy bridge version is permanently blocked. Please update svl-bridge to v2.4.2+.\r\n");
+          socket.destroy();
+          return;
+        }
 
         // Security Guard: A serverKey must NEVER be passed as an authentication token
         if (!token || (serverKey && serverKey.toLowerCase() === token.trim().toLowerCase())) {
