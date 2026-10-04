@@ -1311,18 +1311,18 @@ fastify.get("/api/v1/updates/latest", async (request) => {
 
   return {
     client: {
-      version: "1.0.4",
+      version: "1.0.9",
       mandatory: false,
       url: "https://realms.sunveil.net/releases.html",
-      downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.4-Windows-x64-Portable.zip",
+      downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.9-Windows-x64-Portable.zip",
       platforms: {
         windows: {
-          version: "1.0.4",
-          downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.4-Windows-x64-Portable.zip",
-          portableUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.4-Windows-x64-Portable.zip"
+          version: "1.0.9",
+          downloadUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.9-Windows-x64-Portable.zip",
+          portableUrl: "https://realms.sunveil.net/downloads/SVL-Connect-v1.0.9-Windows-x64-Portable.zip"
         }
       },
-      changelog: "SVL Connect v1.0.4: Hardened anti-ban IP isolation, friendly random key resolution, automatic background update detection."
+      changelog: "SVL Connect v1.0.9: Complete client modding suite (GUIMove, KillEffects, RPC, Capes, Fullbright, Waypoints), redesigned launcher UI, inbuilt anticheat integrity attestation, and mod deduplication."
     },
     bridge: {
       version: "2.4.2",
