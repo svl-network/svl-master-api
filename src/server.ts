@@ -586,21 +586,35 @@ const hashToken = (token: string): string => {
 };
 
 export function isValidToken(token: string): boolean {
-  if (!token) return false;
-  if (token === API_SECRET_KEY) return true;
-  if (process.env.MASTER_API_TOKEN && token === process.env.MASTER_API_TOKEN) return true;
+  if (!token || typeof token !== "string") return false;
+  const cleanToken = token.trim();
+  if (cleanToken === API_SECRET_KEY) return true;
+  if (process.env.MASTER_API_TOKEN && cleanToken === process.env.MASTER_API_TOKEN.trim()) return true;
 
-  // Check user accounts and their multi-server keys
+  // Strict Guard: A serverKey must NEVER be treated as an authentication token
+  for (const u of userStore.values()) {
+    if (u.serverKey && u.serverKey.toLowerCase() === cleanToken.toLowerCase()) return false;
+    if (Array.isArray(u.serverKeys) && u.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === cleanToken.toLowerCase())) return false;
+  }
+
+  // Check user accounts by secret licenseKey
   for (const user of userStore.values()) {
-    if (user.licenseKey && user.licenseKey === token) return true;
-    if (user.serverKey && user.serverKey === token) return true;
-    if (user.serverKeys && user.serverKeys.includes(token)) return true;
+    if (user.isBanned) continue;
+    if (user.licenseKey && user.licenseKey === cleanToken) return true;
   }
 
   // Check licenseStore
-  if (licenseStore.has(token)) {
-    const lic = licenseStore.get(token)!;
+  if (licenseStore.has(cleanToken)) {
+    const lic = licenseStore.get(cleanToken)!;
     if (lic.status === "active") return true;
+  }
+
+  // Check valid signed JWT
+  const decoded = verifyJWT(cleanToken);
+  if (decoded) {
+    const user = userIdStore.get(decoded.sub);
+    if (user && !user.isBanned) return true;
+    if (decoded.role === "admin") return true;
   }
 
   return false;
@@ -611,7 +625,9 @@ export const RESERVED_SUBDOMAINS = new Set([
   "auth", "login", "register", "ws", "relay", "direct", "mail", "email",
   "cdn", "sunveil", "svl", "www", "proxy", "tunnel", "status", "bot",
   "ping", "root", "support", "test", "help", "app", "system", "connect",
-  "minecraft", "mc", "server", "nodes", "edge", "master", "modrinth"
+  "minecraft", "mc", "server", "nodes", "edge", "master", "modrinth",
+  "mojang", "microsoft", "hypixel", "tebex", "paypal", "billing", "c2",
+  "payload", "exploit", "malware", "webhook", "discord", "telegram"
 ]);
 
 export function validateSubdomainOrKey(name: string): { valid: boolean; error?: string } {
@@ -826,6 +842,34 @@ fastify.post("/api/v1/storage/upload", {
     }
   }
 }, async (request, reply) => {
+  const authHeader = request.headers.authorization;
+  const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "";
+  const isAdmin = verifyAdminSecret(token) || (process.env.MASTER_API_TOKEN && token === process.env.MASTER_API_TOKEN.trim());
+  let isLicensed = false;
+  if (!isAdmin) {
+    if (licenseStore.has(token) && licenseStore.get(token)?.status === "active") {
+      isLicensed = true;
+    } else {
+      for (const u of userStore.values()) {
+        if (u.licenseKey === token && !u.isBanned) {
+          isLicensed = true;
+          break;
+        }
+      }
+    }
+    const decoded = verifyJWT(token);
+    if (decoded && decoded.role === "admin") {
+      isLicensed = true;
+    }
+  }
+
+  if (!isAdmin && !isLicensed) {
+    return reply.status(403).send({
+      error: "Forbidden",
+      message: "Direct mod binary upload requires an active verified license or administrator authorization."
+    });
+  }
+
   let tempFilePath: string | null = null;
   try {
     const isMultipart = request.isMultipart();
@@ -1082,24 +1126,69 @@ fastify.post<{ Body: ServerPayload }>("/api/v1/heartbeat", {
 
   const rawMods = Array.isArray(payload.mods) ? payload.mods : [];
 
-  const mods: ModInfo[] = rawMods.map((m) => {
-    const safeProjectId = sanitizeString(m.projectId, 64);
-    const safeFileName = sanitizeString(m.fileName, 128);
-    const safeSha256 = typeof m.sha256 === "string" ? m.sha256.toLowerCase().trim() : "";
-    const isOfficial = m.downloadUrl && m.downloadUrl.startsWith("https://cdn.modrinth.com/");
+  const ALLOWED_TARGET_FOLDERS = new Set(["mods", "resourcepacks", "shaderpacks"]);
+  const DANGEROUS_EXTENSIONS = [".exe", ".bat", ".cmd", ".ps1", ".vbs", ".sh", ".dll", ".so", ".dylib", ".scr", ".msi", ".pif", ".hta", ".cpl", ".reg"];
 
-    return {
-      projectId: safeProjectId,
+  const mods: ModInfo[] = [];
+  for (const m of rawMods) {
+    if (!m || typeof m !== "object") continue;
+
+    // 1. Sanitize & validate fileName (Must be clean JAR or ZIP, strictly no path traversal)
+    let safeFileName = sanitizeString(m.fileName, 128).replace(/[\\/]/g, "").trim();
+    if (!safeFileName || safeFileName.includes("..")) continue;
+
+    const lowerName = safeFileName.toLowerCase();
+    const hasDangerousExt = DANGEROUS_EXTENSIONS.some(ext => lowerName.endsWith(ext) || lowerName.includes(ext + "."));
+    if (hasDangerousExt) continue; // Drop dangerous executables/scripts!
+
+    if (!lowerName.endsWith(".jar") && !lowerName.endsWith(".zip")) {
+      continue; // Strictly only allow .jar and .zip
+    }
+
+    // 2. Validate targetFolder
+    let targetFolder = sanitizeString((m as any).targetFolder, 32).toLowerCase().trim();
+    if (!ALLOWED_TARGET_FOLDERS.has(targetFolder)) {
+      targetFolder = "mods";
+    }
+
+    // 3. Sanitize downloadUrl (Must be HTTPS, no raw IPs or unencrypted HTTP)
+    const rawUrl = typeof m.downloadUrl === "string" ? m.downloadUrl.trim() : "";
+    if (!rawUrl.startsWith("https://")) continue;
+
+    try {
+      const parsedUrl = new URL(rawUrl);
+      if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsedUrl.hostname) || parsedUrl.hostname === "localhost") {
+        continue; // Block raw IP downloads
+      }
+    } catch {
+      continue;
+    }
+
+    // 4. Validate SHA256 checksum
+    const safeSha256 = typeof m.sha256 === "string" && /^[a-fA-F0-9]{64}$/.test(m.sha256.trim())
+      ? m.sha256.toLowerCase().trim()
+      : "";
+
+    // 5. Strict Tier Verification
+    const isOfficialDomain = rawUrl.startsWith("https://cdn.modrinth.com/") ||
+      rawUrl.startsWith("https://edge.forgecdn.net/") ||
+      rawUrl.startsWith("https://realms.sunveil.net/") ||
+      rawUrl.startsWith("https://sunveil.net/");
+
+    const tier = isOfficialDomain && (m.tier === "official") ? "official" : "community";
+
+    mods.push({
+      projectId: sanitizeString(m.projectId, 64),
       fileName: safeFileName,
       sha256: safeSha256,
-      downloadUrl: typeof m.downloadUrl === "string" ? m.downloadUrl.trim() : "",
-      tier: m.tier || (isOfficial ? "official" : "community"),
-      targetFolder: sanitizeString((m as any).targetFolder, 32) || "mods"
-    };
-  });
+      downloadUrl: rawUrl,
+      tier,
+      targetFolder
+    });
+  }
 
   const isVerified = mods.length > 0 && mods.every((m) =>
-    m.tier === "official" && m.downloadUrl && m.downloadUrl.startsWith("https://cdn.modrinth.com/")
+    m.tier === "official" && m.downloadUrl && (m.downloadUrl.startsWith("https://cdn.modrinth.com/") || m.downloadUrl.startsWith("https://realms.sunveil.net/"))
   );
 
   let incomingIp = (request.headers["cf-connecting-ip"] as string)?.trim()

@@ -926,25 +926,32 @@ export const isAuthorizedForServerKey = (token: string, serverKey: string): bool
     return false;
   }
 
+  // Guard: A serverKey must NEVER be used as an authentication token
+  for (const u of userStore.values()) {
+    if (u.serverKey && u.serverKey.toLowerCase() === cleanToken.toLowerCase()) return false;
+    if (Array.isArray(u.serverKeys) && u.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === cleanToken.toLowerCase())) return false;
+  }
+
   // 1. Master admin secrets have authority over all server keys
   if (verifyAdminSecret(cleanToken)) return true;
   if (process.env.MASTER_API_TOKEN && cleanToken === process.env.MASTER_API_TOKEN.trim()) return true;
 
-  // 3. User identifier lookup (by email, ID, licenseKey, or serverKey)
-  const user = findUserByIdentifier(cleanToken);
-  if (user) {
-    if (user.isBanned) return false;
-    if (user.serverKey && user.serverKey.toLowerCase() === cleanKey) return true;
-    if (Array.isArray(user.serverKeys) && user.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === cleanKey)) return true;
+  // 2. Secret License Key check - ONLY secret license keys can authorize server ownership
+  for (const user of userStore.values()) {
+    if (user.isBanned) continue;
+    if (user.licenseKey && user.licenseKey === cleanToken) {
+      if (user.serverKey && user.serverKey.toLowerCase() === cleanKey) return true;
+      if (Array.isArray(user.serverKeys) && user.serverKeys.some(k => typeof k === "string" && k.toLowerCase() === cleanKey)) return true;
+    }
   }
 
-  // 4. License Store verification
+  // 3. License Store verification (by active secret license key)
   const lic = licenseStore.get(cleanToken);
   if (lic && lic.status === "active") {
     if (lic.serverKey && lic.serverKey.toLowerCase() === cleanKey) return true;
   }
 
-  // 5. JWT token verification
+  // 4. JWT token verification
   const decoded = verifyJWT(cleanToken);
   if (decoded) {
     if (decoded.role === "admin") return true;

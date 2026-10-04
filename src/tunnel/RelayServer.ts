@@ -463,8 +463,15 @@ export class RelayServer {
 
         let serverKey = (url.searchParams.get("serverKey") || "").trim();
 
+        // Security Guard: A serverKey must NEVER be passed as an authentication token
+        if (!token || (serverKey && serverKey.toLowerCase() === token.trim().toLowerCase())) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+
         // Safety Guard: If serverKey was omitted or mistakenly sent as a master token, resolve to user's registered serverKey
-        if (!serverKey || isTokenLike(serverKey) || serverKey === token) {
+        if (!serverKey || isTokenLike(serverKey)) {
           const user = findUserByIdentifier(token);
           if (user && user.serverKey && !isTokenLike(user.serverKey)) {
             serverKey = user.serverKey;
@@ -718,6 +725,10 @@ export class RelayServer {
       }
 
       if (buf.length < 5) return;
+      if (buf.length > 8 * 1024 * 1024) {
+        console.warn(`🚨 [SECURITY ALERT] Dropping oversized bridge frame (${buf.length} bytes) on tunnel '${serverKey}'.`);
+        return;
+      }
 
       const pktType = buf.readUInt8(0);
       const connId = buf.readUInt32BE(1);
@@ -725,6 +736,24 @@ export class RelayServer {
 
       if (pktType === PKT_DATA && targetSocket && !targetSocket.destroyed) {
         const payload = buf.subarray(5);
+
+        // Anti-Log4j & JNDI Injection Exploit filter
+        if (payload.includes("${jndi:")) {
+          console.warn(`🚨 [CRITICAL SECURITY ALERT] Blocked JNDI / Log4j exploit payload from tunnel '${serverKey}'! Terminating tunnel.`);
+          this.closeTunnel(serverKey);
+          ws.close(1008, "Security Policy Violation: Prohibited exploit string detected.");
+          return;
+        }
+
+        // Backpressure guard against slow-client memory exhaustion attacks
+        if (targetSocket.writableLength > 4 * 1024 * 1024) {
+          console.warn(`🚨 [SECURITY ALERT] Client write buffer overflow (${targetSocket.writableLength} bytes). Dropping stalled client.`);
+          targetSocket.destroy();
+          clientSockets.delete(connId);
+          tunnel.activeClients = clientSockets.size;
+          return;
+        }
+
         targetSocket.write(payload);
         tunnel.bytesSent += payload.length;
       } else if (pktType === PKT_CLOSE && targetSocket) {
