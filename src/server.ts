@@ -353,6 +353,7 @@ fastify.addHook("preHandler", async (request, reply) => {
   if (request.url.startsWith("/api/v1/user/")) return;
   if (request.url.startsWith("/api/v1/anticheat/verify-session")) return;
   if (request.url.startsWith("/api/v1/capes") || request.url.startsWith("/api/capes")) return;
+  if (request.url.startsWith("/api/v1/cloud") || request.url.startsWith("/api/cloud")) return;
 
   const authHeader = request.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -828,6 +829,199 @@ fastify.get("/health", async () => {
 fastify.get("/api/v1/health", async () => {
   return { status: "ok", uptime: process.uptime(), registeredServers: serverStore.size };
 });
+
+// --- CLOUD-BASED PROFILE & ASSET SYNC (WAYPOINTS, MACROS, SCHEMATICS) ---
+interface CloudSyncProfile {
+  uuid: string;
+  username: string;
+  profileName: string;
+  encryptedPayload: string;
+  updatedAt: number;
+}
+
+interface CloudSharePackage {
+  shareCode: string;
+  authorUuid: string;
+  authorName: string;
+  targetFriend?: string | undefined;
+  notes?: string | undefined;
+  encryptedPayload: string;
+  createdAt: number;
+}
+
+const CLOUD_PROFILES_FILE = path.resolve(getDataDir(), "cloud_profiles.json");
+const CLOUD_SHARES_FILE = path.resolve(getDataDir(), "cloud_shares.json");
+
+const cloudProfiles = new Map<string, CloudSyncProfile>();
+const cloudShares = new Map<string, CloudSharePackage>();
+
+function loadCloudSyncData() {
+  try {
+    if (fs.existsSync(CLOUD_PROFILES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CLOUD_PROFILES_FILE, "utf-8"));
+      for (const [k, v] of Object.entries(data)) {
+        cloudProfiles.set(k, v as CloudSyncProfile);
+      }
+    }
+  } catch (e) {}
+
+  try {
+    if (fs.existsSync(CLOUD_SHARES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CLOUD_SHARES_FILE, "utf-8"));
+      for (const [k, v] of Object.entries(data)) {
+        cloudShares.set(k, v as CloudSharePackage);
+      }
+    }
+  } catch (e) {}
+}
+
+function saveCloudProfiles() {
+  try {
+    const obj = Object.fromEntries(cloudProfiles.entries());
+    fs.writeFileSync(CLOUD_PROFILES_FILE, JSON.stringify(obj, null, 2), "utf-8");
+  } catch (e) {}
+}
+
+function saveCloudShares() {
+  try {
+    const obj = Object.fromEntries(cloudShares.entries());
+    fs.writeFileSync(CLOUD_SHARES_FILE, JSON.stringify(obj, null, 2), "utf-8");
+  } catch (e) {}
+}
+
+loadCloudSyncData();
+
+// Cloud Profile Push (Upload)
+const handleCloudSyncPush = async (request: FastifyRequest, reply: FastifyReply) => {
+  const body = (request.body || {}) as any;
+  const { uuid, username, profileName, encryptedPayload } = body;
+
+  if (!uuid || !encryptedPayload) {
+    return reply.status(400).send({ error: "Missing uuid or encryptedPayload" });
+  }
+
+  const cleanKey = String(uuid).toLowerCase().trim();
+  const entry: CloudSyncProfile = {
+    uuid: cleanKey,
+    username: String(username || "Player").trim(),
+    profileName: String(profileName || "default").trim(),
+    encryptedPayload: String(encryptedPayload),
+    updatedAt: Date.now()
+  };
+
+  cloudProfiles.set(cleanKey, entry);
+  saveCloudProfiles();
+
+  return { success: true, message: "Profile synchronized to cloud", updatedAt: entry.updatedAt };
+};
+
+fastify.post("/api/v1/cloud/sync", handleCloudSyncPush);
+fastify.post("/api/cloud/sync", handleCloudSyncPush);
+
+// Cloud Profile Pull (Download)
+const handleCloudSyncPull = async (request: FastifyRequest, reply: FastifyReply) => {
+  const query = (request.query || {}) as any;
+  const uuid = query.uuid;
+
+  if (!uuid) {
+    return reply.status(400).send({ error: "Missing uuid query parameter" });
+  }
+
+  const cleanKey = String(uuid).toLowerCase().trim();
+  const entry = cloudProfiles.get(cleanKey);
+
+  if (!entry) {
+    return reply.status(404).send({ error: "No cloud profile found for this uuid" });
+  }
+
+  return {
+    success: true,
+    uuid: entry.uuid,
+    username: entry.username,
+    profileName: entry.profileName,
+    encryptedPayload: entry.encryptedPayload,
+    updatedAt: entry.updatedAt
+  };
+};
+
+fastify.get("/api/v1/cloud/sync", handleCloudSyncPull);
+fastify.get("/api/cloud/sync", handleCloudSyncPull);
+
+// Cloud Asset / Waypoint Sharing (Generate Share Code)
+const handleCloudShare = async (request: FastifyRequest, reply: FastifyReply) => {
+  const body = (request.body || {}) as any;
+  const { authorUuid, authorName, targetFriend, notes, encryptedPayload } = body;
+
+  if (!encryptedPayload) {
+    return reply.status(400).send({ error: "Missing encryptedPayload" });
+  }
+
+  const randomHex = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const shareCode = `SVL-SH-${randomHex}`;
+
+  const sharePkg: CloudSharePackage = {
+    shareCode,
+    authorUuid: String(authorUuid || "anonymous"),
+    authorName: String(authorName || "Friend"),
+    targetFriend: targetFriend ? String(targetFriend).trim() : undefined,
+    notes: notes ? String(notes).trim() : undefined,
+    encryptedPayload: String(encryptedPayload),
+    createdAt: Date.now()
+  };
+
+  cloudShares.set(shareCode, sharePkg);
+  saveCloudShares();
+
+  return { success: true, shareCode, message: "Share code generated successfully" };
+};
+
+fastify.post("/api/v1/cloud/share", handleCloudShare);
+fastify.post("/api/cloud/share", handleCloudShare);
+
+// Retrieve Shared Package by Share Code
+const handleGetSharePackage = async (request: FastifyRequest, reply: FastifyReply) => {
+  const params = (request.params || {}) as any;
+  const code = String(params.shareCode || "").toUpperCase().trim();
+
+  const pkg = cloudShares.get(code);
+  if (!pkg) {
+    return reply.status(404).send({ error: "Share code not found or expired" });
+  }
+
+  return {
+    success: true,
+    shareCode: pkg.shareCode,
+    authorName: pkg.authorName,
+    notes: pkg.notes,
+    encryptedPayload: pkg.encryptedPayload,
+    createdAt: pkg.createdAt
+  };
+};
+
+fastify.get("/api/v1/cloud/share/:shareCode", handleGetSharePackage);
+fastify.get("/api/cloud/share/:shareCode", handleGetSharePackage);
+
+// Inbox of items shared to a specific username
+const handleGetSharedInbox = async (request: FastifyRequest, reply: FastifyReply) => {
+  const query = (request.query || {}) as any;
+  const friend = String(query.username || "").toLowerCase().trim();
+
+  if (!friend) {
+    return { shares: [] };
+  }
+
+  const results: CloudSharePackage[] = [];
+  for (const pkg of cloudShares.values()) {
+    if (pkg.targetFriend && pkg.targetFriend.toLowerCase().trim() === friend) {
+      results.push(pkg);
+    }
+  }
+
+  return { shares: results };
+};
+
+fastify.get("/api/v1/cloud/shares/inbox", handleGetSharedInbox);
+fastify.get("/api/cloud/shares/inbox", handleGetSharedInbox);
 
 // 2. Storage Check Endpunkt
 fastify.get<{ Params: { sha256: string } }>("/api/v1/storage/check/:sha256", async (request, reply) => {
