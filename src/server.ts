@@ -852,15 +852,40 @@ interface CloudSharePackage {
 const CLOUD_PROFILES_FILE = path.resolve(getDataDir(), "cloud_profiles.json");
 const CLOUD_SHARES_FILE = path.resolve(getDataDir(), "cloud_shares.json");
 
+const MAX_CLOUD_PAYLOAD_BYTES = 512 * 1024; // Strict 512 KB payload cap to prevent DoS / storage exhaustion
+const MAX_CLOUD_PROFILES = 50000;
+const MAX_CLOUD_SHARES = 10000;
+const CLOUD_SHARE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14-day automatic expiration
+const CLOUD_PAYLOAD_BASE64_REGEX = /^[A-Za-z0-9+/=_\-\r\n]+$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HEX_IDENTIFIER_REGEX = /^[0-9a-fA-F-]{16,64}$/;
+const SHARE_CODE_REGEX = /^SVL-SH-[0-9A-Z]{6,12}$/;
+
 const cloudProfiles = new Map<string, CloudSyncProfile>();
 const cloudShares = new Map<string, CloudSharePackage>();
+
+function pruneExpiredCloudShares(): void {
+  const now = Date.now();
+  let pruned = false;
+  for (const [code, pkg] of cloudShares.entries()) {
+    if (!pkg.createdAt || (now - pkg.createdAt > CLOUD_SHARE_TTL_MS)) {
+      cloudShares.delete(code);
+      pruned = true;
+    }
+  }
+  if (pruned) {
+    saveCloudShares();
+  }
+}
 
 function loadCloudSyncData() {
   try {
     if (fs.existsSync(CLOUD_PROFILES_FILE)) {
       const data = JSON.parse(fs.readFileSync(CLOUD_PROFILES_FILE, "utf-8"));
       for (const [k, v] of Object.entries(data)) {
-        cloudProfiles.set(k, v as CloudSyncProfile);
+        if (typeof k === "string" && v && typeof v === "object") {
+          cloudProfiles.set(k, v as CloudSyncProfile);
+        }
       }
     }
   } catch (e) {}
@@ -869,10 +894,14 @@ function loadCloudSyncData() {
     if (fs.existsSync(CLOUD_SHARES_FILE)) {
       const data = JSON.parse(fs.readFileSync(CLOUD_SHARES_FILE, "utf-8"));
       for (const [k, v] of Object.entries(data)) {
-        cloudShares.set(k, v as CloudSharePackage);
+        if (typeof k === "string" && v && typeof v === "object") {
+          cloudShares.set(k, v as CloudSharePackage);
+        }
       }
     }
   } catch (e) {}
+
+  pruneExpiredCloudShares();
 }
 
 function saveCloudProfiles() {
@@ -891,21 +920,44 @@ function saveCloudShares() {
 
 loadCloudSyncData();
 
-// Cloud Profile Push (Upload)
+// Cloud Profile Push (Upload) - Hardened & Rate-Limited
 const handleCloudSyncPush = async (request: FastifyRequest, reply: FastifyReply) => {
   const body = (request.body || {}) as any;
   const { uuid, username, profileName, encryptedPayload } = body;
 
-  if (!uuid || !encryptedPayload) {
-    return reply.status(400).send({ error: "Missing uuid or encryptedPayload" });
+  if (!uuid || typeof uuid !== "string" || !encryptedPayload || typeof encryptedPayload !== "string") {
+    return reply.status(400).send({ error: "Missing or invalid uuid or encryptedPayload" });
   }
 
-  const cleanKey = String(uuid).toLowerCase().trim();
+  const cleanKey = uuid.toLowerCase().trim();
+  if (!UUID_REGEX.test(cleanKey) && !HEX_IDENTIFIER_REGEX.test(cleanKey) && cleanKey !== "offline") {
+    return reply.status(400).send({ error: "Invalid uuid format" });
+  }
+
+  const payloadStr = encryptedPayload.trim();
+  if (payloadStr.length < 16 || payloadStr.length > MAX_CLOUD_PAYLOAD_BYTES) {
+    return reply.status(400).send({
+      error: "Payload size violation",
+      message: `Payload must be between 16 bytes and ${MAX_CLOUD_PAYLOAD_BYTES / 1024} KB.`
+    });
+  }
+
+  if (!CLOUD_PAYLOAD_BASE64_REGEX.test(payloadStr)) {
+    return reply.status(400).send({ error: "Encrypted payload contains illegal non-base64 characters" });
+  }
+
+  if (cloudProfiles.size >= MAX_CLOUD_PROFILES && !cloudProfiles.has(cleanKey)) {
+    return reply.status(503).send({ error: "Cloud profile storage capacity reached. Try again later." });
+  }
+
+  const safeUsername = sanitizeString(username || "Player", 32);
+  const safeProfile = sanitizeString(profileName || "default", 32);
+
   const entry: CloudSyncProfile = {
     uuid: cleanKey,
-    username: String(username || "Player").trim(),
-    profileName: String(profileName || "default").trim(),
-    encryptedPayload: String(encryptedPayload),
+    username: safeUsername,
+    profileName: safeProfile,
+    encryptedPayload: payloadStr,
     updatedAt: Date.now()
   };
 
@@ -915,21 +967,33 @@ const handleCloudSyncPush = async (request: FastifyRequest, reply: FastifyReply)
   return { success: true, message: "Profile synchronized to cloud", updatedAt: entry.updatedAt };
 };
 
-fastify.post("/api/v1/cloud/sync", handleCloudSyncPush);
-fastify.post("/api/cloud/sync", handleCloudSyncPush);
+const cloudPushRouteOpts = {
+  config: {
+    rateLimit: {
+      max: 30,
+      timeWindow: "1 minute"
+    }
+  }
+};
 
-// Cloud Profile Pull (Download)
+fastify.post("/api/v1/cloud/sync", cloudPushRouteOpts, handleCloudSyncPush);
+fastify.post("/api/cloud/sync", cloudPushRouteOpts, handleCloudSyncPush);
+
+// Cloud Profile Pull (Download) - Hardened & Rate-Limited
 const handleCloudSyncPull = async (request: FastifyRequest, reply: FastifyReply) => {
   const query = (request.query || {}) as any;
   const uuid = query.uuid;
 
-  if (!uuid) {
+  if (!uuid || typeof uuid !== "string") {
     return reply.status(400).send({ error: "Missing uuid query parameter" });
   }
 
-  const cleanKey = String(uuid).toLowerCase().trim();
-  const entry = cloudProfiles.get(cleanKey);
+  const cleanKey = uuid.toLowerCase().trim();
+  if (!UUID_REGEX.test(cleanKey) && !HEX_IDENTIFIER_REGEX.test(cleanKey) && cleanKey !== "offline") {
+    return reply.status(400).send({ error: "Invalid uuid format" });
+  }
 
+  const entry = cloudProfiles.get(cleanKey);
   if (!entry) {
     return reply.status(404).send({ error: "No cloud profile found for this uuid" });
   }
@@ -944,48 +1008,99 @@ const handleCloudSyncPull = async (request: FastifyRequest, reply: FastifyReply)
   };
 };
 
-fastify.get("/api/v1/cloud/sync", handleCloudSyncPull);
-fastify.get("/api/cloud/sync", handleCloudSyncPull);
+const cloudPullRouteOpts = {
+  config: {
+    rateLimit: {
+      max: 60,
+      timeWindow: "1 minute"
+    }
+  }
+};
 
-// Cloud Asset / Waypoint Sharing (Generate Share Code)
+fastify.get("/api/v1/cloud/sync", cloudPullRouteOpts, handleCloudSyncPull);
+fastify.get("/api/cloud/sync", cloudPullRouteOpts, handleCloudSyncPull);
+
+// Cloud Asset / Waypoint Sharing (Generate Share Code) - Hardened & Rate-Limited
 const handleCloudShare = async (request: FastifyRequest, reply: FastifyReply) => {
+  pruneExpiredCloudShares();
+
+  if (cloudShares.size >= MAX_CLOUD_SHARES) {
+    return reply.status(429).send({ error: "Cloud share capacity reached. Please wait for expired shares to clear." });
+  }
+
   const body = (request.body || {}) as any;
   const { authorUuid, authorName, targetFriend, notes, encryptedPayload } = body;
 
-  if (!encryptedPayload) {
-    return reply.status(400).send({ error: "Missing encryptedPayload" });
+  if (!encryptedPayload || typeof encryptedPayload !== "string") {
+    return reply.status(400).send({ error: "Missing or invalid encryptedPayload" });
   }
 
-  const randomHex = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const payloadStr = encryptedPayload.trim();
+  if (payloadStr.length < 16 || payloadStr.length > MAX_CLOUD_PAYLOAD_BYTES) {
+    return reply.status(400).send({
+      error: "Payload size violation",
+      message: `Payload must be between 16 bytes and ${MAX_CLOUD_PAYLOAD_BYTES / 1024} KB.`
+    });
+  }
+
+  if (!CLOUD_PAYLOAD_BASE64_REGEX.test(payloadStr)) {
+    return reply.status(400).send({ error: "Encrypted payload contains illegal non-base64 characters" });
+  }
+
+  const randomHex = crypto.randomBytes(4).toString("hex").toUpperCase();
   const shareCode = `SVL-SH-${randomHex}`;
+
+  const safeAuthorUuid = sanitizeString(authorUuid || "anonymous", 64);
+  const safeAuthorName = sanitizeString(authorName || "Friend", 32);
+  const safeTargetFriend = targetFriend ? sanitizeString(targetFriend, 32) : undefined;
+  const safeNotes = notes ? sanitizeString(notes, 256) : undefined;
 
   const sharePkg: CloudSharePackage = {
     shareCode,
-    authorUuid: String(authorUuid || "anonymous"),
-    authorName: String(authorName || "Friend"),
-    targetFriend: targetFriend ? String(targetFriend).trim() : undefined,
-    notes: notes ? String(notes).trim() : undefined,
-    encryptedPayload: String(encryptedPayload),
+    authorUuid: safeAuthorUuid,
+    authorName: safeAuthorName,
+    targetFriend: safeTargetFriend,
+    notes: safeNotes,
+    encryptedPayload: payloadStr,
     createdAt: Date.now()
   };
 
   cloudShares.set(shareCode, sharePkg);
   saveCloudShares();
 
-  return { success: true, shareCode, message: "Share code generated successfully" };
+  return { success: true, shareCode, message: "Share code generated successfully", expiresAt: sharePkg.createdAt + CLOUD_SHARE_TTL_MS };
 };
 
-fastify.post("/api/v1/cloud/share", handleCloudShare);
-fastify.post("/api/cloud/share", handleCloudShare);
+const cloudShareRouteOpts = {
+  config: {
+    rateLimit: {
+      max: 15,
+      timeWindow: "1 minute"
+    }
+  }
+};
 
-// Retrieve Shared Package by Share Code
+fastify.post("/api/v1/cloud/share", cloudShareRouteOpts, handleCloudShare);
+fastify.post("/api/cloud/share", cloudShareRouteOpts, handleCloudShare);
+
+// Retrieve Shared Package by Share Code - Hardened & Expiry-Enforced
 const handleGetSharePackage = async (request: FastifyRequest, reply: FastifyReply) => {
   const params = (request.params || {}) as any;
   const code = String(params.shareCode || "").toUpperCase().trim();
 
+  if (!SHARE_CODE_REGEX.test(code)) {
+    return reply.status(400).send({ error: "Invalid share code format" });
+  }
+
   const pkg = cloudShares.get(code);
   if (!pkg) {
     return reply.status(404).send({ error: "Share code not found or expired" });
+  }
+
+  if (Date.now() - pkg.createdAt > CLOUD_SHARE_TTL_MS) {
+    cloudShares.delete(code);
+    saveCloudShares();
+    return reply.status(404).send({ error: "Share code expired" });
   }
 
   return {
@@ -994,34 +1109,63 @@ const handleGetSharePackage = async (request: FastifyRequest, reply: FastifyRepl
     authorName: pkg.authorName,
     notes: pkg.notes,
     encryptedPayload: pkg.encryptedPayload,
-    createdAt: pkg.createdAt
+    createdAt: pkg.createdAt,
+    expiresAt: pkg.createdAt + CLOUD_SHARE_TTL_MS
   };
 };
 
-fastify.get("/api/v1/cloud/share/:shareCode", handleGetSharePackage);
-fastify.get("/api/cloud/share/:shareCode", handleGetSharePackage);
+const cloudGetShareRouteOpts = {
+  config: {
+    rateLimit: {
+      max: 60,
+      timeWindow: "1 minute"
+    }
+  }
+};
 
-// Inbox of items shared to a specific username
+fastify.get("/api/v1/cloud/share/:shareCode", cloudGetShareRouteOpts, handleGetSharePackage);
+fastify.get("/api/cloud/share/:shareCode", cloudGetShareRouteOpts, handleGetSharePackage);
+
+// Inbox of items shared to a specific username - Hardened & Cleaned
 const handleGetSharedInbox = async (request: FastifyRequest, reply: FastifyReply) => {
-  const query = (request.query || {}) as any;
-  const friend = String(query.username || "").toLowerCase().trim();
+  pruneExpiredCloudShares();
 
-  if (!friend) {
+  const query = (request.query || {}) as any;
+  const friend = sanitizeString(query.username || "", 32).toLowerCase();
+
+  if (!friend || friend.length < 3) {
     return { shares: [] };
   }
 
-  const results: CloudSharePackage[] = [];
+  const now = Date.now();
+  const results: any[] = [];
   for (const pkg of cloudShares.values()) {
+    if (now - pkg.createdAt > CLOUD_SHARE_TTL_MS) continue;
     if (pkg.targetFriend && pkg.targetFriend.toLowerCase().trim() === friend) {
-      results.push(pkg);
+      results.push({
+        shareCode: pkg.shareCode,
+        authorName: pkg.authorName,
+        notes: pkg.notes,
+        createdAt: pkg.createdAt,
+        expiresAt: pkg.createdAt + CLOUD_SHARE_TTL_MS
+      });
     }
   }
 
   return { shares: results };
 };
 
-fastify.get("/api/v1/cloud/shares/inbox", handleGetSharedInbox);
-fastify.get("/api/cloud/shares/inbox", handleGetSharedInbox);
+const cloudInboxRouteOpts = {
+  config: {
+    rateLimit: {
+      max: 30,
+      timeWindow: "1 minute"
+    }
+  }
+};
+
+fastify.get("/api/v1/cloud/shares/inbox", cloudInboxRouteOpts, handleGetSharedInbox);
+fastify.get("/api/cloud/shares/inbox", cloudInboxRouteOpts, handleGetSharedInbox);
 
 // 2. Storage Check Endpunkt
 fastify.get<{ Params: { sha256: string } }>("/api/v1/storage/check/:sha256", async (request, reply) => {
@@ -1819,6 +1963,123 @@ fastify.get<{ Params: { uuid: string } }>("/api/capes/:uuid.png", handleGetCapeT
 
 fastify.post<{ Params: { uuid: string }; Body: { cape?: string; textureBase64?: string } }>("/api/v1/capes/:uuid", handleUpdateCape);
 fastify.post<{ Params: { uuid: string }; Body: { cape?: string; textureBase64?: string } }>("/api/capes/:uuid", handleUpdateCape);
+
+// ============================================================
+// 8d. Sunveil Emotes & Ingame Cosmetics / Merch Sync
+// ============================================================
+const COSMETICS_DB_FILE = path.resolve(getDataDir(), "cosmetics_db.json");
+let playerCosmetics: Record<string, { hat?: string; weapon?: string; wings?: string; cape?: string }> = {};
+try {
+  if (fs.existsSync(COSMETICS_DB_FILE)) {
+    playerCosmetics = JSON.parse(fs.readFileSync(COSMETICS_DB_FILE, "utf-8"));
+  }
+} catch {
+  playerCosmetics = {};
+}
+
+function saveCosmeticsToDisk() {
+  try {
+    fs.writeFileSync(COSMETICS_DB_FILE, JSON.stringify(playerCosmetics, null, 2), "utf-8");
+  } catch (e) {
+    console.error("[MasterAPI:Cosmetics] Failed to save cosmetics_db.json:", e);
+  }
+}
+
+// In-memory active emotes: uuid -> { emote: string, time: number }
+const activePlayerEmotes = new Map<string, { emote: string; time: number }>();
+
+fastify.post<{ Body: { uuid?: string; emote?: string; time?: number } }>("/api/v1/emotes/play", async (request) => {
+  const { uuid, emote, time } = request.body || {};
+  if (uuid && emote) {
+    const rawUuid = uuid.toLowerCase().replace(/-/g, "");
+    activePlayerEmotes.set(rawUuid, { emote, time: time || Date.now() });
+  }
+  return { success: true };
+});
+fastify.post<{ Body: { uuid?: string; emote?: string; time?: number } }>("/api/emotes/play", async (request) => {
+  const { uuid, emote, time } = request.body || {};
+  if (uuid && emote) {
+    const rawUuid = uuid.toLowerCase().replace(/-/g, "");
+    activePlayerEmotes.set(rawUuid, { emote, time: time || Date.now() });
+  }
+  return { success: true };
+});
+
+fastify.get("/api/v1/emotes/active", async () => {
+  const now = Date.now();
+  const list: { uuid: string; emote: string; time: number }[] = [];
+  for (const [uuid, data] of activePlayerEmotes.entries()) {
+    if (now - data.time < 30000) {
+      list.push({ uuid, emote: data.emote, time: data.time });
+    } else {
+      activePlayerEmotes.delete(uuid);
+    }
+  }
+  return { success: true, emotes: list };
+});
+fastify.get("/api/emotes/active", async () => {
+  const now = Date.now();
+  const list: { uuid: string; emote: string; time: number }[] = [];
+  for (const [uuid, data] of activePlayerEmotes.entries()) {
+    if (now - data.time < 30000) {
+      list.push({ uuid, emote: data.emote, time: data.time });
+    } else {
+      activePlayerEmotes.delete(uuid);
+    }
+  }
+  return { success: true, emotes: list };
+});
+
+fastify.post<{ Body: { uuid?: string; hat?: string; weapon?: string; wings?: string; cape?: string } }>("/api/v1/cosmetics/equip", async (request) => {
+  const { uuid, hat, weapon, wings, cape } = request.body || {};
+  if (!uuid) return { success: false, error: "Missing uuid" };
+  const rawUuid = uuid.toLowerCase().replace(/-/g, "");
+  const existing = playerCosmetics[rawUuid] || {};
+  if (hat !== undefined) existing.hat = hat;
+  if (weapon !== undefined) existing.weapon = weapon;
+  if (wings !== undefined) existing.wings = wings;
+  if (cape !== undefined) {
+    existing.cape = cape;
+    playerCapes[rawUuid] = cape;
+    saveCapesToDisk();
+  }
+  playerCosmetics[rawUuid] = existing;
+  saveCosmeticsToDisk();
+  return { success: true, uuid: rawUuid, cosmetics: existing };
+});
+fastify.post<{ Body: { uuid?: string; hat?: string; weapon?: string; wings?: string; cape?: string } }>("/api/cosmetics/equip", async (request) => {
+  const { uuid, hat, weapon, wings, cape } = request.body || {};
+  if (!uuid) return { success: false, error: "Missing uuid" };
+  const rawUuid = uuid.toLowerCase().replace(/-/g, "");
+  const existing = playerCosmetics[rawUuid] || {};
+  if (hat !== undefined) existing.hat = hat;
+  if (weapon !== undefined) existing.weapon = weapon;
+  if (wings !== undefined) existing.wings = wings;
+  if (cape !== undefined) {
+    existing.cape = cape;
+    playerCapes[rawUuid] = cape;
+    saveCapesToDisk();
+  }
+  playerCosmetics[rawUuid] = existing;
+  saveCosmeticsToDisk();
+  return { success: true, uuid: rawUuid, cosmetics: existing };
+});
+
+fastify.get<{ Params: { uuid: string } }>("/api/v1/cosmetics/:uuid", async (request, reply) => {
+  const rawUuid = request.params.uuid.toLowerCase().replace(/-/g, "");
+  const cosmetics = playerCosmetics[rawUuid] || {};
+  return { success: true, uuid: rawUuid, ...cosmetics };
+});
+fastify.get<{ Params: { uuid: string } }>("/api/cosmetics/:uuid", async (request, reply) => {
+  const rawUuid = request.params.uuid.toLowerCase().replace(/-/g, "");
+  const cosmetics = playerCosmetics[rawUuid] || {};
+  return { success: true, uuid: rawUuid, ...cosmetics };
+});
+
+fastify.get("/api/v1/cosmetics/users", async () => {
+  return { success: true, users: Object.keys(playerCosmetics) };
+});
+
 
 // User JWT Authentication Pre-Handler
 const requireUserAuth = async (request: FastifyRequest, reply: FastifyReply) => {
